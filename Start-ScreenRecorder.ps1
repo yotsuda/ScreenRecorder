@@ -46,6 +46,27 @@ function Start-ScreenRecorder {
     }
 
     Add-Type -AssemblyName PresentationFramework,System.Windows.Forms,System.Drawing
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class DisplayHelper {
+    [DllImport("user32.dll")]
+    public static extern bool EnumDisplaySettings(string deviceName, int modeNum, ref DEVMODE devMode);
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    public struct DEVMODE {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string dmDeviceName;
+        public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra;
+        public int dmFields, dmPositionX, dmPositionY, dmDisplayOrientation, dmDisplayFixedOutput;
+        public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string dmFormName;
+        public short dmLogPixels;
+        public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
+    }
+    public const int ENUM_CURRENT_SETTINGS = -1;
+}
+"@
     [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     Topmost="True" AllowsTransparency="True" WindowStyle="None" Background="Transparent"
@@ -60,6 +81,7 @@ function Start-ScreenRecorder {
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <TextBlock Name="Clock" Foreground="White" FontSize="32" FontFamily="Consolas" VerticalAlignment="Center"/>
                 <Button Name="BtnToggle" Content="● REC" Width="45" Height="22" FontSize="11" Margin="8,0,0,0" Background="#AA444444" Foreground="White" BorderThickness="0" Padding="0" VerticalAlignment="Center"/>
+                <ComboBox Name="ComboMonitor" Width="50" Height="22" FontSize="10" Margin="4,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"/>
             </StackPanel>
         </StackPanel>
     </Border>
@@ -69,6 +91,7 @@ function Start-ScreenRecorder {
     $clock = $window.FindName("Clock")
     $btnToggle = $window.FindName("BtnToggle")
     $mainBorder = $window.FindName("MainBorder")
+    $comboMonitor = $window.FindName("ComboMonitor")
     $window.FindName("MenuExit").Add_Click({ $window.Close() })
     $window.Add_MouseLeftButtonDown({ $window.DragMove() })
     $window.Add_MouseWheel({ param($s,$e)
@@ -79,17 +102,86 @@ function Start-ScreenRecorder {
             $btnToggle.Width = $size * 1.4
             $btnToggle.Height = $size * 0.7
             $btnToggle.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
+            $comboMonitor.FontSize = $size * 0.3
+            $comboMonitor.Width = $size * 1.5
+            $comboMonitor.Height = $size * 0.7
+            $comboMonitor.Margin = [System.Windows.Thickness]::new($size * 0.12, 0, 0, 0)
             $mainBorder.Padding = [System.Windows.Thickness]::new($size * 0.3, $size * 0.2, $size * 0.3, $size * 0.2)
         }
+    })
+
+    # Monitor setup
+    $script:screens = [System.Windows.Forms.Screen]::AllScreens
+    $script:targetScreen = [System.Windows.Forms.Screen]::PrimaryScreen
+    $script:dpiScale = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width / [System.Windows.SystemParameters]::VirtualScreenWidth
+
+    function Get-PhysicalBounds($screen) {
+        $dm = New-Object DisplayHelper+DEVMODE
+        $dm.dmSize = [System.Runtime.InteropServices.Marshal]::SizeOf($dm)
+        [DisplayHelper]::EnumDisplaySettings($screen.DeviceName, [DisplayHelper]::ENUM_CURRENT_SETTINGS, [ref]$dm) | Out-Null
+        [System.Drawing.Rectangle]::new($dm.dmPositionX, $dm.dmPositionY, $dm.dmPelsWidth, $dm.dmPelsHeight)
+    }
+    if ($script:screens.Count -gt 1) {
+        $comboMonitor.Visibility = "Visible"
+        for ($i = 0; $i -lt $script:screens.Count; $i++) {
+            $label = if ($script:screens[$i].Primary) { "Mon $($i+1)*" } else { "Mon $($i+1)" }
+            $comboMonitor.Items.Add($label) | Out-Null
+        }
+        $comboMonitor.SelectedIndex = [Array]::IndexOf($script:screens, [System.Windows.Forms.Screen]::PrimaryScreen)
+    }
+
+    function Show-MonitorOverlay {
+        $overlays = @()
+        for ($i = 0; $i -lt $script:screens.Count; $i++) {
+            $scr = $script:screens[$i]
+            $phys = Get-PhysicalBounds $scr
+            $isSelected = ($i -eq $comboMonitor.SelectedIndex)
+            $wpfLeft = $phys.Left / $script:dpiScale
+            $wpfTop = $phys.Top / $script:dpiScale
+            $wpfWidth = $phys.Width / $script:dpiScale
+            $wpfHeight = $phys.Height / $script:dpiScale
+            [xml]$overlayXaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    WindowStyle="None" AllowsTransparency="True" Topmost="True"
+    Background="$( if ($isSelected) { '#88004488' } else { '#88000000' } )"
+    Left="$wpfLeft" Top="$wpfTop" Width="$wpfWidth" Height="$wpfHeight">
+    <Grid>
+        <TextBlock Text="$($i+1)" FontSize="300" FontWeight="Bold"
+            Foreground="$( if ($isSelected) { '#AAFFFFFF' } else { '#44FFFFFF' } )"
+            HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Grid>
+</Window>
+"@
+            $overlay = [Windows.Markup.XamlReader]::Load([System.Xml.XmlNodeReader]::new($overlayXaml))
+            $overlay.Add_MouseLeftButtonDown({ param($s,$e) $s.Close() })
+            $overlay.Show()
+            $overlays += $overlay
+        }
+        # Auto close after 1.5 seconds
+        $timer = [System.Windows.Threading.DispatcherTimer]::new()
+        $timer.Interval = [TimeSpan]::FromMilliseconds(1500)
+        $timer.Add_Tick({
+            $timer.Stop()
+            foreach ($o in $overlays) { if ($o.IsVisible) { $o.Close() } }
+        }.GetNewClosure())
+        $timer.Start()
+    }
+
+    $comboMonitor.Add_SelectionChanged({
+        $script:targetScreen = $script:screens[$comboMonitor.SelectedIndex]
+        $script:bounds = Get-PhysicalBounds $script:targetScreen
+        $script:w = [int]($script:bounds.Width * $Scale)
+        $script:h = [int]($script:bounds.Height * $Scale)
+        Show-MonitorOverlay
     })
 
     $script:recording = $false
     $script:outDir = $null
     $script:saved = 0
     $script:prevBytes = $null
-    $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-    $w = [int]($bounds.Width * $Scale)
-    $h = [int]($bounds.Height * $Scale)
+    $script:bounds = Get-PhysicalBounds $script:targetScreen
+    $script:w = [int]($script:bounds.Width * $Scale)
+    $script:h = [int]($script:bounds.Height * $Scale)
 
     function Get-SampleBytes($bmp, $excludeRect) {
         $bytes = @()
@@ -115,22 +207,22 @@ function Start-ScreenRecorder {
     $recTimer.Add_Tick({
         if (-not $script:recording) { return }
         $now = Get-Date
-        $bmp = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
+        $bmp = New-Object System.Drawing.Bitmap($script:bounds.Width, $script:bounds.Height)
         $g = [System.Drawing.Graphics]::FromImage($bmp)
-        $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+        $g.CopyFromScreen($script:bounds.Location, [System.Drawing.Point]::Empty, $script:bounds.Size)
         $g.Dispose()
-        $thumb = New-Object System.Drawing.Bitmap($w, $h)
+        $thumb = New-Object System.Drawing.Bitmap($script:w, $script:h)
         $g2 = [System.Drawing.Graphics]::FromImage($thumb)
-        $g2.DrawImage($bmp, 0, 0, $w, $h)
+        $g2.DrawImage($bmp, 0, 0, $script:w, $script:h)
         $g2.Dispose()
         $bmp.Dispose()
 
-        # Calculate exclude rectangle for clock window (scaled)
+        # Calculate exclude rectangle for clock window (scaled, relative to target monitor)
         $excludeRect = @{
-            Left   = [int]($window.Left * $Scale)
-            Top    = [int]($window.Top * $Scale)
-            Right  = [int](($window.Left + $window.ActualWidth) * $Scale)
-            Bottom = [int](($window.Top + $window.ActualHeight) * $Scale)
+            Left   = [int](($window.Left - $script:bounds.Left) * $Scale)
+            Top    = [int](($window.Top - $script:bounds.Top) * $Scale)
+            Right  = [int](($window.Left + $window.ActualWidth - $script:bounds.Left) * $Scale)
+            Bottom = [int](($window.Top + $window.ActualHeight - $script:bounds.Top) * $Scale)
         }
         $currBytes = Get-SampleBytes $thumb $excludeRect
         $diff = 0
@@ -170,11 +262,11 @@ function Start-ScreenRecorder {
             $script:prevBytes = $null
             $btnToggle.Content = "■ STOP"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::Red
-            $recTimer.Start()
+            $comboMonitor.IsEnabled = $false; $recTimer.Start()
         } else {
             # Stop recording
             $recTimer.Stop()
-            $script:recording = $false
+            $script:recording = $false; $comboMonitor.IsEnabled = $true
             $btnToggle.Content = "● REC"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::White
             Start-Process explorer $script:outDir

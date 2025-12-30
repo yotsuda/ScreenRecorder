@@ -1,8 +1,8 @@
-param(
+﻿param(
     [switch]$Background,
     [int]$FPS = 2,
     [double]$Scale = 1.0,
-    [int]$Threshold = 1
+    [switch]$SaveMasked
 )
 
 function Start-ScreenRecorder {
@@ -19,8 +19,8 @@ function Start-ScreenRecorder {
         Frames per second for capture. Default is 2.
     .PARAMETER Scale
         Scale factor for captured images (0.1 to 1.0). Default is 1.0.
-    .PARAMETER Threshold
-        Minimum pixel difference to save a frame. Default is 1.
+    .PARAMETER SaveMasked
+        Saves masked images (with clock area blacked out) for debugging.
     .EXAMPLE
         Start-ScreenRecorder
         Starts the recorder in background mode.
@@ -34,14 +34,16 @@ function Start-ScreenRecorder {
         [int]$FPS = 2,
         [ValidateRange(0.1, 1.0)]
         [double]$Scale = 1.0,
-        [int]$Threshold = 1
+        [switch]$SaveMasked
     )
 
     if (-not $Background) {
         $exe = (Get-Process -Id $PID).Path
         $scriptPath = $MyInvocation.MyCommand.ScriptBlock.File
         if (-not $scriptPath) { $scriptPath = $PSCommandPath }
-        Start-Process $exe -ArgumentList "-WindowStyle Hidden -File `"$scriptPath`" -Background -FPS $FPS -Scale $Scale -Threshold $Threshold" -WindowStyle Hidden
+        $args = "-WindowStyle Hidden -File `"$scriptPath`" -Background -FPS $FPS -Scale $Scale"
+        if ($SaveMasked) { $args += " -SaveMasked" }
+        Start-Process $exe -ArgumentList $args -WindowStyle Hidden
         return
     }
 
@@ -178,72 +180,74 @@ public class DisplayHelper {
     $script:recording = $false
     $script:outDir = $null
     $script:saved = 0
-    $script:prevBytes = $null
+    $script:prevHash = $null
     $script:bounds = Get-PhysicalBounds $script:targetScreen
     $script:w = [int]($script:bounds.Width * $Scale)
     $script:h = [int]($script:bounds.Height * $Scale)
 
-    function Get-SampleBytes($bmp, $excludeRect) {
-        $bytes = @()
-        $stepX = [Math]::Max(1, [int]($bmp.Width / 20))
-        $stepY = [Math]::Max(1, [int]($bmp.Height / 20))
-        for ($y = 0; $y -lt $bmp.Height; $y += $stepY) {
-            for ($x = 0; $x -lt $bmp.Width; $x += $stepX) {
-                # Skip if inside exclude rectangle
-                if ($excludeRect -and 
-                    $x -ge $excludeRect.Left -and $x -lt $excludeRect.Right -and
-                    $y -ge $excludeRect.Top -and $y -lt $excludeRect.Bottom) {
-                    continue
-                }
-                $c = $bmp.GetPixel($x, $y)
-                $bytes += $c.R, $c.G, $c.B
-            }
+    function Get-ImageHash($bmp, $excludeRect) {
+        # Black out the clock area for hash calculation
+        if ($excludeRect) {
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.FillRectangle([System.Drawing.Brushes]::Black,
+                $excludeRect.Left, $excludeRect.Top,
+                ($excludeRect.Right - $excludeRect.Left),
+                ($excludeRect.Bottom - $excludeRect.Top))
+            $g.Dispose()
         }
-        $bytes
+        $ms = [System.IO.MemoryStream]::new()
+        $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Bmp)
+        $hash = [System.Security.Cryptography.MD5]::Create().ComputeHash($ms.ToArray())
+        $ms.Dispose()
+        [Convert]::ToHexString($hash)
     }
 
     $recTimer = New-Object System.Windows.Threading.DispatcherTimer
     $recTimer.Interval = [TimeSpan]::FromMilliseconds([int](1000 / $FPS))
     $recTimer.Add_Tick({
         if (-not $script:recording) { return }
-        $now = Get-Date
-        $bmp = New-Object System.Drawing.Bitmap($script:bounds.Width, $script:bounds.Height)
-        $g = [System.Drawing.Graphics]::FromImage($bmp)
-        $g.CopyFromScreen($script:bounds.Location, [System.Drawing.Point]::Empty, $script:bounds.Size)
-        $g.Dispose()
-        $thumb = New-Object System.Drawing.Bitmap($script:w, $script:h)
-        $g2 = [System.Drawing.Graphics]::FromImage($thumb)
-        $g2.DrawImage($bmp, 0, 0, $script:w, $script:h)
-        $g2.Dispose()
-        $bmp.Dispose()
+        try {
+            $now = Get-Date
+            $bmp = New-Object System.Drawing.Bitmap($script:bounds.Width, $script:bounds.Height)
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($script:bounds.Location, [System.Drawing.Point]::Empty, $script:bounds.Size)
+            $g.Dispose()
+            $thumb = New-Object System.Drawing.Bitmap($script:w, $script:h)
+            $g2 = [System.Drawing.Graphics]::FromImage($thumb)
+            $g2.DrawImage($bmp, 0, 0, $script:w, $script:h)
+            $g2.Dispose()
+            $bmp.Dispose()
 
-        # Calculate exclude rectangle for clock window (scaled, relative to target monitor)
-        $excludeRect = @{
-            Left   = [int](($window.Left - $script:bounds.Left) * $Scale)
-            Top    = [int](($window.Top - $script:bounds.Top) * $Scale)
-            Right  = [int](($window.Left + $window.ActualWidth - $script:bounds.Left) * $Scale)
-            Bottom = [int](($window.Top + $window.ActualHeight - $script:bounds.Top) * $Scale)
-        }
-        $currBytes = Get-SampleBytes $thumb $excludeRect
-        $diff = 0
-        if ($script:prevBytes) {
-            for ($i = 0; $i -lt $currBytes.Count; $i++) {
-                $diff += [Math]::Abs($currBytes[$i] - $script:prevBytes[$i])
+            # Calculate exclude rectangle for clock window (scaled, relative to target monitor)
+            $excludeRect = @{
+                Left   = [int](($window.Left * $script:dpiScale - $script:bounds.Left) * $Scale)
+                Top    = [int](($window.Top * $script:dpiScale - $script:bounds.Top) * $Scale)
+                Right  = [int]((($window.Left + $window.ActualWidth) * $script:dpiScale - $script:bounds.Left) * $Scale)
+                Bottom = [int]((($window.Top + $window.ActualHeight) * $script:dpiScale - $script:bounds.Top) * $Scale)
             }
-            $diff = $diff / $currBytes.Count
-        } else { $diff = 999 }
 
-        if ($diff -ge $Threshold) {
-            $filename = $now.ToString("yyyyMMdd_HHmmss_f")
-            $jpegCodec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
-            $qualityParam = [System.Drawing.Imaging.Encoder]::Quality
-            $encoderParams = [System.Drawing.Imaging.EncoderParameters]::new(1)
-            $encoderParams.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new($qualityParam, 75L)
-            $thumb.Save("$($script:outDir)\$filename.jpg", $jpegCodec, $encoderParams)
-            $script:saved++
-            $script:prevBytes = $currBytes
+            # Create masked copy for hash calculation
+            $masked = $thumb.Clone()
+            $currHash = Get-ImageHash $masked $excludeRect
+
+            if ($currHash -ne $script:prevHash) {
+                $filename = $now.ToString("yyyyMMdd_HHmmss_f")
+                $jpegCodec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq "image/jpeg" }
+                $qualityParam = [System.Drawing.Imaging.Encoder]::Quality
+                $encoderParams = [System.Drawing.Imaging.EncoderParameters]::new(1)
+                $encoderParams.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new($qualityParam, 75L)
+                $thumb.Save("$($script:outDir)\$filename.jpg", $jpegCodec, $encoderParams)
+                if ($SaveMasked) {
+                    $masked.Save("$($script:outDir)\${filename}_masked.jpg", $jpegCodec, $encoderParams)
+                }
+                $script:saved++
+                $script:prevHash = $currHash
+            }
+            $masked.Dispose()
+            $thumb.Dispose()
+        } catch {
+            # Ignore capture errors (e.g., monitor disconnected)
         }
-        $thumb.Dispose()
     })
 
     $btnToggle.Add_Click({
@@ -259,7 +263,7 @@ public class DisplayHelper {
             New-Item -ItemType Directory -Path $script:outDir -Force | Out-Null
             $script:recording = $true
             $script:saved = 0
-            $script:prevBytes = $null
+            $script:prevHash = $null
             $btnToggle.Content = "■ STOP"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::Red
             $comboMonitor.IsEnabled = $false; $recTimer.Start()

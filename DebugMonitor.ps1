@@ -1,4 +1,4 @@
-param([switch]$Background, [int]$FPS = 2, [double]$Scale = 1.0, [int]$Threshold = 1)
+param([switch]$Background, [int]$FPS = 2, [double]$Scale = 1.0, [switch]$SaveMasked)
 
 $logFile = (Join-Path $PSScriptRoot "debug.log")
 "=== Start $(Get-Date) ===" | Out-File $logFile -Append

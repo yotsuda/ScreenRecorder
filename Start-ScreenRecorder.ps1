@@ -1,4 +1,4 @@
-﻿param(
+param(
     [switch]$Background,
     [int]$FPS = 2,
     [double]$Scale = 1.0,
@@ -16,9 +16,9 @@ function Start-ScreenRecorder {
     .PARAMETER Background
         Runs the recorder in a hidden background process.
     .PARAMETER FPS
-        Frames per second for capture. Default is 5.
+        Frames per second for capture. Default is 2.
     .PARAMETER Scale
-        Scale factor for captured images (0.1 to 1.0). Default is 0.5.
+        Scale factor for captured images (0.1 to 1.0). Default is 1.0.
     .PARAMETER Threshold
         Minimum pixel difference to save a frame. Default is 1.
     .EXAMPLE
@@ -277,6 +277,7 @@ public class DisplayHelper {
     $clockTimer.Interval = [TimeSpan]::FromMilliseconds(100)
     $clockTimer.Add_Tick({ $clock.Text = (Get-Date).ToString("HH:mm:ss.f") })
     $clockTimer.Start()
+    $window.Add_Closed({ $clockTimer.Stop(); $recTimer.Stop() })
     $window.ShowDialog()
 }
 

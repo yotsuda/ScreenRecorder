@@ -1,6 +1,6 @@
 param([switch]$Background, [int]$FPS = 2, [double]$Scale = 1.0, [int]$Threshold = 1)
 
-$logFile = "C:\MyProj\ScreenRecorder\debug.log"
+$logFile = (Join-Path $PSScriptRoot "debug.log")
 "=== Start $(Get-Date) ===" | Out-File $logFile -Append
 
 if (-not $Background) {

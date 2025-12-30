@@ -69,7 +69,7 @@ PowerShellVersion = '5.1'
 # NestedModules = @()
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = 'Start-ScreenRecorder'
+FunctionsToExport = @('Start-ScreenRecorder')
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
@@ -98,10 +98,10 @@ PrivateData = @{
         Tags = 'Screen', 'Capture', 'Recording', 'Debug', 'Screenshot', 'Clock'
 
         # A URL to the license for this module.
-        LicenseUri = 'https://github.com/yourname/ScreenRecorder/blob/main/LICENSE'
+        LicenseUri = 'https://github.com/yotsuda/ScreenRecorder/blob/main/LICENSE'
 
         # A URL to the main website for this project.
-        ProjectUri = 'https://github.com/yourname/ScreenRecorder'
+        ProjectUri = 'https://github.com/yotsuda/ScreenRecorder'
 
         # A URL to an icon representing this module.
         # IconUri = ''

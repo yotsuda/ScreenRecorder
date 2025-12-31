@@ -43,7 +43,7 @@ function Start-ScreenRecorder {
         $exe = (Get-Process -Id $PID).Path
         $scriptPath = $MyInvocation.MyCommand.ScriptBlock.File
         if (-not $scriptPath) { $scriptPath = $PSCommandPath }
-        $args = "-WindowStyle Hidden -File `"$scriptPath`" -Background -FPS $FPS -Scale $Scale"
+        $args = "-NoProfile -WindowStyle Hidden -File `"$scriptPath`" -Background -FPS $FPS -Scale $Scale"
         if ($SaveMasked) { $args += " -SaveMasked" }
         Start-Process $exe -ArgumentList $args -WindowStyle Hidden
         return

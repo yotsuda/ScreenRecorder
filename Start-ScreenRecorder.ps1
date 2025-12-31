@@ -77,7 +77,11 @@ public class DisplayHelper {
     SizeToContent="WidthAndHeight" Left="20" Top="20">
     <Window.ContextMenu>
         <ContextMenu>
-            <MenuItem Name="MenuExit" Header="終了 (_X)"/>
+            <MenuItem Name="MenuExit">
+                <MenuItem.Header>
+                    <TextBlock>E<Underline>x</Underline>it</TextBlock>
+                </MenuItem.Header>
+            </MenuItem>
         </ContextMenu>
     </Window.ContextMenu>
     <Border Name="MainBorder" Background="#AA000000" CornerRadius="8" Padding="10,6">
@@ -96,7 +100,9 @@ public class DisplayHelper {
     $btnToggle = $window.FindName("BtnToggle")
     $mainBorder = $window.FindName("MainBorder")
     $comboMonitor = $window.FindName("ComboMonitor")
-    $window.FindName("MenuExit").Add_Click({ $window.Close() })
+    $menuExit = $window.FindName("MenuExit")
+    $menuExit.Add_Click({ $window.Close() })
+    $menuExit.Parent.Add_KeyDown({ param($s,$e) if ($e.Key -eq 'X') { $window.Close() } })
     $window.Add_MouseLeftButtonDown({ $window.DragMove() })
     $window.Add_MouseWheel({ param($s,$e)
         $size = $clock.FontSize + ($e.Delta / 30)

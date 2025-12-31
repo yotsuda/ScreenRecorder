@@ -13,6 +13,7 @@ function Start-ScreenRecorder {
         Captures screenshots at regular intervals while displaying a large clock overlay.
         Designed for correlating screen captures with log timestamps during bug reproduction.
         Requires no external dependencies - uses only PowerShell and .NET.
+        Can be run directly without module installation.
     .PARAMETER Background
         Runs the recorder in a hidden background process.
     .PARAMETER FPS

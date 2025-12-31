@@ -15,7 +15,7 @@ RootModule = 'ScreenRecorder.psm1'
 ModuleVersion = '0.1.0'
 
 # Supported PSEditions
-# CompatiblePSEditions = @()
+CompatiblePSEditions = @('Desktop')
 
 # ID used to uniquely identify this module
 GUID = '76e1126d-81f6-45d8-92e9-ebd6d916b89b'
@@ -30,7 +30,7 @@ CompanyName = 'Unknown'
 Copyright = '(c) Yoshifumi Tsuda. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Screen capture tool with clock overlay for debugging and log correlation. No external dependencies required.'
+Description = 'Screen capture tool with clock overlay for debugging and log correlation. No external dependencies required. Can be run directly without module installation.'
 
 # Minimum version of the PowerShell engine required by this module
 PowerShellVersion = '5.1'
@@ -98,7 +98,7 @@ PrivateData = @{
         Tags = 'Screen', 'Capture', 'Recording', 'Debug', 'Screenshot', 'Clock'
 
         # A URL to the license for this module.
-        LicenseUri = 'https://github.com/yotsuda/ScreenRecorder/blob/main/LICENSE'
+        LicenseUri = 'https://github.com/yotsuda/ScreenRecorder/blob/master/LICENSE'
 
         # A URL to the main website for this project.
         ProjectUri = 'https://github.com/yotsuda/ScreenRecorder'

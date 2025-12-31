@@ -30,6 +30,7 @@ function Start-ScreenRecorder {
     #>
     [CmdletBinding()]
     param(
+        [Parameter(DontShow)]
         [switch]$Background,
         [int]$FPS = 2,
         [ValidateRange(0.1, 1.0)]

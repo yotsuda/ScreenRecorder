@@ -12,7 +12,7 @@
 RootModule = 'ScreenRecorder.psm1'
 
 # Version number of this module.
-ModuleVersion = '0.1.0'
+ModuleVersion = '0.2.0'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Desktop')
@@ -27,7 +27,7 @@ Author = 'Yoshifumi Tsuda'
 CompanyName = 'Unknown'
 
 # Copyright statement for this module
-Copyright = '(c) Yoshifumi Tsuda. All rights reserved.'
+Copyright = 'Copyright (c) 2025 Yoshifumi Tsuda. MIT License.'
 
 # Description of the functionality provided by this module
 Description = 'Screen capture tool with clock overlay for debugging and log correlation. No external dependencies required. Can be run directly without module installation.'

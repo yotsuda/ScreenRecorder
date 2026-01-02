@@ -1,4 +1,15 @@
-﻿param(
+﻿<#PSScriptInfo
+.VERSION 0.2.0
+.GUID d47eab76-de84-454d-aead-8b61ed3335eb
+.AUTHOR Yoshifumi Tsuda
+.COPYRIGHT Copyright (c) 2025 Yoshifumi Tsuda. MIT License.
+.TAGS Screen Capture Recording Debug Screenshot Clock
+.LICENSEURI https://github.com/yotsuda/ScreenRecorder/blob/master/LICENSE
+.PROJECTURI https://github.com/yotsuda/ScreenRecorder
+.DESCRIPTION Screen capture tool with clock overlay for debugging and log correlation.
+#>
+
+param(
     [switch]$Background,
     [int]$FPS = 2,
     [double]$Scale = 1.0,

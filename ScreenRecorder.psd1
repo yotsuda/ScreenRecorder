@@ -15,7 +15,7 @@ RootModule = 'ScreenRecorder.psm1'
 ModuleVersion = '0.2.0'
 
 # Supported PSEditions
-CompatiblePSEditions = @('Desktop')
+CompatiblePSEditions = @('Desktop', 'Core')
 
 # ID used to uniquely identify this module
 GUID = '76e1126d-81f6-45d8-92e9-ebd6d916b89b'
@@ -24,7 +24,7 @@ GUID = '76e1126d-81f6-45d8-92e9-ebd6d916b89b'
 Author = 'Yoshifumi Tsuda'
 
 # Company or vendor of this module
-CompanyName = 'Unknown'
+CompanyName = ''
 
 # Copyright statement for this module
 Copyright = 'Copyright (c) 2025 Yoshifumi Tsuda. MIT License.'
@@ -95,7 +95,7 @@ PrivateData = @{
     PSData = @{
 
         # Tags applied to this module. These help with module discovery in online galleries.
-        Tags = 'Screen', 'Capture', 'Recording', 'Debug', 'Screenshot', 'Clock'
+        Tags = @('Screen', 'Capture', 'Recording', 'Debug', 'Screenshot', 'Clock', 'Windows')
 
         # A URL to the license for this module.
         LicenseUri = 'https://github.com/yotsuda/ScreenRecorder/blob/master/LICENSE'

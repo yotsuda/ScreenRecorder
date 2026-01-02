@@ -206,19 +206,25 @@ public class DisplayHelper {
 
     function Get-ImageHash($bmp, $excludeRect) {
         # Black out the clock area for hash calculation
-        if ($excludeRect) {
-            $g = [System.Drawing.Graphics]::FromImage($bmp)
-            $g.FillRectangle([System.Drawing.Brushes]::Black,
-                $excludeRect.Left, $excludeRect.Top,
-                ($excludeRect.Right - $excludeRect.Left),
-                ($excludeRect.Bottom - $excludeRect.Top))
-            $g.Dispose()
+        $g = $ms = $md5 = $null
+        try {
+            if ($excludeRect) {
+                $g = [System.Drawing.Graphics]::FromImage($bmp)
+                $g.FillRectangle([System.Drawing.Brushes]::Black,
+                    $excludeRect.Left, $excludeRect.Top,
+                    ($excludeRect.Right - $excludeRect.Left),
+                    ($excludeRect.Bottom - $excludeRect.Top))
+            }
+            $ms = [System.IO.MemoryStream]::new()
+            $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Bmp)
+            $md5 = [System.Security.Cryptography.MD5]::Create()
+            $hash = $md5.ComputeHash($ms.ToArray())
+            ([BitConverter]::ToString($hash) -replace '-','')
+        } finally {
+            if ($md5) { $md5.Dispose() }
+            if ($ms) { $ms.Dispose() }
+            if ($g) { $g.Dispose() }
         }
-        $ms = [System.IO.MemoryStream]::new()
-        $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Bmp)
-        $hash = [System.Security.Cryptography.MD5]::Create().ComputeHash($ms.ToArray())
-        $ms.Dispose()
-        ([BitConverter]::ToString($hash) -replace '-','')
     }
 
     $recTimer = New-Object System.Windows.Threading.DispatcherTimer

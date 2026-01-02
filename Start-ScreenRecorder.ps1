@@ -225,17 +225,18 @@ public class DisplayHelper {
     $recTimer.Interval = [TimeSpan]::FromMilliseconds([int](1000 / $FPS))
     $recTimer.Add_Tick({
         if (-not $script:recording) { return }
+        $bmp = $g = $thumb = $g2 = $masked = $null
         try {
             $now = Get-Date
             $bmp = New-Object System.Drawing.Bitmap($script:bounds.Width, $script:bounds.Height)
             $g = [System.Drawing.Graphics]::FromImage($bmp)
             $g.CopyFromScreen($script:bounds.Location, [System.Drawing.Point]::Empty, $script:bounds.Size)
-            $g.Dispose()
+            $g.Dispose(); $g = $null
             $thumb = New-Object System.Drawing.Bitmap($script:w, $script:h)
             $g2 = [System.Drawing.Graphics]::FromImage($thumb)
             $g2.DrawImage($bmp, 0, 0, $script:w, $script:h)
-            $g2.Dispose()
-            $bmp.Dispose()
+            $g2.Dispose(); $g2 = $null
+            $bmp.Dispose(); $bmp = $null
 
             # Calculate exclude rectangle for clock window (scaled, relative to target monitor)
             $excludeRect = @{
@@ -262,10 +263,14 @@ public class DisplayHelper {
                 $script:saved++
                 $script:prevHash = $currHash
             }
-            $masked.Dispose()
-            $thumb.Dispose()
         } catch {
             # Ignore capture errors (e.g., monitor disconnected)
+        } finally {
+            if ($masked) { $masked.Dispose() }
+            if ($thumb) { $thumb.Dispose() }
+            if ($g2) { $g2.Dispose() }
+            if ($bmp) { $bmp.Dispose() }
+            if ($g) { $g.Dispose() }
         }
     })
 

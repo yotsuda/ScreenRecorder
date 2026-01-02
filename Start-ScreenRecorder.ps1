@@ -204,6 +204,11 @@ public class DisplayHelper {
     $script:w = [int]($script:bounds.Width * $Scale)
     $script:h = [int]($script:bounds.Height * $Scale)
 
+    # Pre-cache JPEG encoder (avoid repeated lookup per frame)
+    $script:jpegCodec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq "image/jpeg" }
+    $script:encoderParams = [System.Drawing.Imaging.EncoderParameters]::new(1)
+    $script:encoderParams.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new([System.Drawing.Imaging.Encoder]::Quality, 75L)
+
     function Get-ImageHash($bmp, $excludeRect) {
         # Black out the clock area for hash calculation
         $g = $ms = $md5 = $null
@@ -258,13 +263,9 @@ public class DisplayHelper {
 
             if ($currHash -ne $script:prevHash) {
                 $filename = $now.ToString("yyyyMMdd_HHmmss_f")
-                $jpegCodec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq "image/jpeg" }
-                $qualityParam = [System.Drawing.Imaging.Encoder]::Quality
-                $encoderParams = [System.Drawing.Imaging.EncoderParameters]::new(1)
-                $encoderParams.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new($qualityParam, 75L)
-                $thumb.Save("$($script:outDir)\$filename.jpg", $jpegCodec, $encoderParams)
+                $thumb.Save("$($script:outDir)\$filename.jpg", $script:jpegCodec, $script:encoderParams)
                 if ($SaveMasked) {
-                    $masked.Save("$($script:outDir)\${filename}_masked.jpg", $jpegCodec, $encoderParams)
+                    $masked.Save("$($script:outDir)\${filename}_masked.jpg", $script:jpegCodec, $script:encoderParams)
                 }
                 $script:saved++
                 $script:prevHash = $currHash

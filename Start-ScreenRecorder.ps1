@@ -207,7 +207,7 @@ public class DisplayHelper {
         $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Bmp)
         $hash = [System.Security.Cryptography.MD5]::Create().ComputeHash($ms.ToArray())
         $ms.Dispose()
-        [Convert]::ToHexString($hash)
+        ([BitConverter]::ToString($hash) -replace '-','')
     }
 
     $recTimer = New-Object System.Windows.Threading.DispatcherTimer

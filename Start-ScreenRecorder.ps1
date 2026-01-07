@@ -100,7 +100,7 @@ public class DisplayHelper {
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <TextBlock Name="Clock" Foreground="White" FontSize="32" FontFamily="Consolas" VerticalAlignment="Center"/>
                 <Button Name="BtnToggle" Content="● REC" Width="45" Height="22" FontSize="11" Margin="8,0,0,0" Background="#AA444444" Foreground="White" BorderThickness="0" Padding="0" VerticalAlignment="Center"/>
-                <ComboBox Name="ComboMonitor" Width="50" Height="22" FontSize="10" Margin="4,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"/>
+                <TextBlock Name="MonitorLabel" Foreground="White" FontSize="10" Margin="4,0,0,0" VerticalAlignment="Center" Cursor="Hand" Visibility="Collapsed"/>
             </StackPanel>
         </StackPanel>
     </Border>
@@ -110,7 +110,7 @@ public class DisplayHelper {
     $clock = $window.FindName("Clock")
     $btnToggle = $window.FindName("BtnToggle")
     $mainBorder = $window.FindName("MainBorder")
-    $comboMonitor = $window.FindName("ComboMonitor")
+    $script:monitorLabel = $window.FindName("MonitorLabel")
     $menuExit = $window.FindName("MenuExit")
     $menuExit.Add_Click({ $window.Close() })
     $menuExit.Parent.Add_KeyDown({ param($s,$e) if ($e.Key -eq 'X') { $window.Close() } })
@@ -123,10 +123,8 @@ public class DisplayHelper {
             $btnToggle.Width = $size * 1.4
             $btnToggle.Height = $size * 0.7
             $btnToggle.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
-            $comboMonitor.FontSize = $size * 0.3
-            $comboMonitor.Width = $size * 1.5
-            $comboMonitor.Height = $size * 0.7
-            $comboMonitor.Margin = [System.Windows.Thickness]::new($size * 0.12, 0, 0, 0)
+            $script:monitorLabel.FontSize = $size * 0.3
+            $script:monitorLabel.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
             $mainBorder.Padding = [System.Windows.Thickness]::new($size * 0.3, $size * 0.2, $size * 0.3, $size * 0.2)
         }
     })
@@ -142,20 +140,43 @@ public class DisplayHelper {
         [DisplayHelper]::EnumDisplaySettings($screen.DeviceName, [DisplayHelper]::ENUM_CURRENT_SETTINGS, [ref]$dm) | Out-Null
         [System.Drawing.Rectangle]::new($dm.dmPositionX, $dm.dmPositionY, $dm.dmPelsWidth, $dm.dmPelsHeight)
     }
-    if ($script:screens.Count -gt 1) {
-        $comboMonitor.Visibility = "Visible"
-        for ($i = 0; $i -lt $script:screens.Count; $i++) {
-            $label = if ($script:screens[$i].Primary) { "Mon $($i+1)*" } else { "Mon $($i+1)" }
-            $comboMonitor.Items.Add($label) | Out-Null
+    # Selected monitors (array of indices)
+    $script:selectedMonitors = @([Array]::IndexOf($script:screens, [System.Windows.Forms.Screen]::PrimaryScreen))
+
+    function Update-MonitorLabel {
+        if ($script:selectedMonitors.Count -eq 0) {
+            $script:monitorLabel.Text = "None"
+        } elseif ($script:selectedMonitors.Count -eq 1) {
+            $idx = $script:selectedMonitors[0]
+            $script:monitorLabel.Text = if ($script:screens[$idx].Primary) { "Mon $($idx+1)*" } else { "Mon $($idx+1)" }
+        } else {
+            $nums = ($script:selectedMonitors | Sort-Object | ForEach-Object { $_ + 1 }) -join '+'
+            $script:monitorLabel.Text = "Mon $nums"
         }
-        $comboMonitor.SelectedIndex = [Array]::IndexOf($script:screens, [System.Windows.Forms.Screen]::PrimaryScreen)
+    }
+
+    function Update-CaptureRegion {
+        if ($script:selectedMonitors.Count -eq 0) { return }
+        # Calculate bounding rectangle of all selected monitors
+        $minX = [int]::MaxValue; $minY = [int]::MaxValue
+        $maxX = [int]::MinValue; $maxY = [int]::MinValue
+        foreach ($idx in $script:selectedMonitors) {
+            $b = Get-PhysicalBounds $script:screens[$idx]
+            if ($b.Left -lt $minX) { $minX = $b.Left }
+            if ($b.Top -lt $minY) { $minY = $b.Top }
+            if ($b.Right -gt $maxX) { $maxX = $b.Right }
+            if ($b.Bottom -gt $maxY) { $maxY = $b.Bottom }
+        }
+        $script:bounds = [System.Drawing.Rectangle]::new($minX, $minY, $maxX - $minX, $maxY - $minY)
+        $script:w = [int]($script:bounds.Width * $Scale)
+        $script:h = [int]($script:bounds.Height * $Scale)
     }
 
     function Show-MonitorOverlay {
         $overlays = @()
         for ($i = 0; $i -lt $script:screens.Count; $i++) {
             $scr = $script:screens[$i]
-            $isSelected = ($i -eq $comboMonitor.SelectedIndex)
+            $isSelected = $script:selectedMonitors -contains $i
             $wpfLeft = $scr.Bounds.Left / $script:dpiScale
             $wpfTop = $scr.Bounds.Top / $script:dpiScale
             $wpfWidth = $scr.Bounds.Width / $script:dpiScale
@@ -187,21 +208,55 @@ public class DisplayHelper {
         $timer.Start()
     }
 
-    $comboMonitor.Add_SelectionChanged({
-        $script:targetScreen = $script:screens[$comboMonitor.SelectedIndex]
-        $script:bounds = Get-PhysicalBounds $script:targetScreen
-        $script:w = [int]($script:bounds.Width * $Scale)
-        $script:h = [int]($script:bounds.Height * $Scale)
-        Show-MonitorOverlay
-    })
+    if ($script:screens.Count -gt 1) {
+        $script:monitorLabel.Visibility = "Visible"
+        Update-MonitorLabel
+
+        # Create context menu with checkboxes
+        $script:monitorMenu = [System.Windows.Controls.ContextMenu]::new()
+        $script:monitorMenu.StaysOpen = $true
+        for ($i = 0; $i -lt $script:screens.Count; $i++) {
+            $menuItem = [System.Windows.Controls.MenuItem]::new()
+            $menuItem.Header = if ($script:screens[$i].Primary) { "Mon $($i+1)*" } else { "Mon $($i+1)" }
+            $menuItem.IsCheckable = $true
+            $menuItem.IsChecked = $script:selectedMonitors -contains $i
+            $menuItem.Tag = $i
+            $menuItem.StaysOpenOnClick = $true
+            $menuItem.Add_Click({
+                param($sender, $e)
+                $idx = $sender.Tag
+                if ($sender.IsChecked) {
+                    if ($script:selectedMonitors -notcontains $idx) {
+                        $script:selectedMonitors += $idx
+                    }
+                } else {
+                    # Prevent unchecking the last one
+                    if ($script:selectedMonitors.Count -le 1) {
+                        $sender.IsChecked = $true
+                        return
+                    }
+                    $script:selectedMonitors = @($script:selectedMonitors | Where-Object { $_ -ne $idx })
+                }
+                Update-MonitorLabel
+                Update-CaptureRegion
+                Show-MonitorOverlay
+            })
+            $script:monitorMenu.Items.Add($menuItem) | Out-Null
+        }
+
+
+        $script:monitorLabel.ContextMenu = $script:monitorMenu
+        $script:monitorLabel.Add_MouseLeftButtonDown({
+            $script:monitorMenu.PlacementTarget = $script:monitorLabel
+            $script:monitorMenu.IsOpen = $true
+        })
+    }
 
     $script:recording = $false
     $script:outDir = $null
     $script:saved = 0
     $script:prevHash = $null
-    $script:bounds = Get-PhysicalBounds $script:targetScreen
-    $script:w = [int]($script:bounds.Width * $Scale)
-    $script:h = [int]($script:bounds.Height * $Scale)
+    Update-CaptureRegion
 
     # Pre-cache JPEG encoder (avoid repeated lookup per frame)
     $script:jpegCodec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq "image/jpeg" }
@@ -237,11 +292,30 @@ public class DisplayHelper {
     $recTimer.Add_Tick({
         if (-not $script:recording) { return }
         $bmp = $g = $thumb = $g2 = $masked = $null
+        $monBmps = @()
         try {
             $now = Get-Date
             $bmp = New-Object System.Drawing.Bitmap($script:bounds.Width, $script:bounds.Height)
             $g = [System.Drawing.Graphics]::FromImage($bmp)
-            $g.CopyFromScreen($script:bounds.Location, [System.Drawing.Point]::Empty, $script:bounds.Size)
+            if ($script:selectedMonitors.Count -eq 1) {
+                # Single monitor: fast path
+                $g.CopyFromScreen($script:bounds.Location, [System.Drawing.Point]::Empty, $script:bounds.Size)
+            } else {
+                # Multiple monitors: capture each and composite
+                foreach ($idx in $script:selectedMonitors) {
+                    $monBounds = Get-PhysicalBounds $script:screens[$idx]
+                    $monBmp = New-Object System.Drawing.Bitmap($monBounds.Width, $monBounds.Height)
+                    $monBmps += $monBmp
+                    $monG = [System.Drawing.Graphics]::FromImage($monBmp)
+                    $monG.CopyFromScreen($monBounds.Location, [System.Drawing.Point]::Empty, $monBounds.Size)
+                    $monG.Dispose()
+                    $relX = $monBounds.Left - $script:bounds.Left
+                    $relY = $monBounds.Top - $script:bounds.Top
+                    $g.DrawImage($monBmp, $relX, $relY)
+                }
+                foreach ($mb in $monBmps) { $mb.Dispose() }
+                $monBmps = @()
+            }
             $g.Dispose(); $g = $null
             $thumb = New-Object System.Drawing.Bitmap($script:w, $script:h)
             $g2 = [System.Drawing.Graphics]::FromImage($thumb)
@@ -273,6 +347,7 @@ public class DisplayHelper {
         } catch {
             # Ignore capture errors (e.g., monitor disconnected)
         } finally {
+            foreach ($mb in $monBmps) { if ($mb) { $mb.Dispose() } }
             if ($masked) { $masked.Dispose() }
             if ($thumb) { $thumb.Dispose() }
             if ($g2) { $g2.Dispose() }
@@ -297,11 +372,11 @@ public class DisplayHelper {
             $script:prevHash = $null
             $btnToggle.Content = "■ STOP"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::Red
-            $comboMonitor.IsEnabled = $false; $recTimer.Start()
+            $script:monitorLabel.IsHitTestVisible = $false; $script:monitorLabel.Opacity = 0.5; $recTimer.Start()
         } else {
             # Stop recording
             $recTimer.Stop()
-            $script:recording = $false; $comboMonitor.IsEnabled = $true
+            $script:recording = $false; $script:monitorLabel.IsHitTestVisible = $true; $script:monitorLabel.Opacity = 1.0
             $btnToggle.Content = "● REC"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::White
             Start-Process explorer $script:outDir

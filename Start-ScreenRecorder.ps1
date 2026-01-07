@@ -85,8 +85,8 @@ public class DisplayHelper {
     }
     public const int ENUM_CURRENT_SETTINGS = -1;
 
-    // Fast FNV-1a hash for bitmap comparison
-    public static long ComputeImageHash(Bitmap bmp, int exL, int exT, int exR, int exB) {
+    // Fast FNV-1a hash for bitmap comparison using unsafe pointer access
+    public static unsafe long ComputeImageHash(Bitmap bmp, int exL, int exT, int exR, int exB) {
         var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height),
             ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
         try {
@@ -94,15 +94,25 @@ public class DisplayHelper {
             int stride = data.Stride;
             int width = bmp.Width;
             int height = bmp.Height;
-            IntPtr scan0 = data.Scan0;
+            byte* scan0 = (byte*)data.Scan0;
             for (int y = 0; y < height; y++) {
-                bool inExcludeY = (y >= exT && y < exB);
-                int rowOffset = y * stride;
-                for (int x = 0; x < width; x++) {
-                    if (inExcludeY && x >= exL && x < exR) continue;
-                    int pixel = Marshal.ReadInt32(scan0, rowOffset + x * 4);
-                    hash ^= pixel;
-                    hash *= 0x100000001b3L;
+                int* row = (int*)(scan0 + y * stride);
+                if (y >= exT && y < exB) {
+                    // Row intersects exclude region: process left and right parts
+                    for (int x = 0; x < exL; x++) {
+                        hash ^= row[x];
+                        hash *= 0x100000001b3L;
+                    }
+                    for (int x = exR; x < width; x++) {
+                        hash ^= row[x];
+                        hash *= 0x100000001b3L;
+                    }
+                } else {
+                    // Full row
+                    for (int x = 0; x < width; x++) {
+                        hash ^= row[x];
+                        hash *= 0x100000001b3L;
+                    }
                 }
             }
             return hash;
@@ -111,7 +121,7 @@ public class DisplayHelper {
         }
     }
 }
-"@ -ReferencedAssemblies $drawingAsm,$primAsm
+"@ -ReferencedAssemblies $drawingAsm,$primAsm -CompilerOptions '/unsafe'
     [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     Topmost="True" AllowsTransparency="True" WindowStyle="None" Background="Transparent"

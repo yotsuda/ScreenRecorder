@@ -159,8 +159,8 @@ public class DisplayHelper {
             $isSelected = ($i -eq $comboMonitor.SelectedIndex)
             $wpfLeft = $phys.Left / $script:dpiScale
             $wpfTop = $phys.Top / $script:dpiScale
-            $wpfWidth = $phys.Width / $script:dpiScale
-            $wpfHeight = $phys.Height / $script:dpiScale
+            $wpfWidth = $scr.Bounds.Width / $script:dpiScale
+            $wpfHeight = $scr.Bounds.Height / $script:dpiScale
             [xml]$overlayXaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     WindowStyle="None" AllowsTransparency="True" Topmost="True"

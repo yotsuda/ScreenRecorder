@@ -206,6 +206,7 @@ public class DisplayHelper {
 
     # Pre-cache JPEG encoder (avoid repeated lookup per frame)
     $script:jpegCodec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq "image/jpeg" }
+    if (-not $script:jpegCodec) { throw "JPEG encoder not found" }
     $script:encoderParams = [System.Drawing.Imaging.EncoderParameters]::new(1)
     $script:encoderParams.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new([System.Drawing.Imaging.Encoder]::Quality, 75L)
 

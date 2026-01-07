@@ -61,8 +61,12 @@ function Start-ScreenRecorder {
     }
 
     Add-Type -AssemblyName PresentationFramework,System.Windows.Forms,System.Drawing
+    $drawingAsm = [System.Drawing.Bitmap].Assembly.Location
+    $primAsm = [System.Drawing.Rectangle].Assembly.Location
     Add-Type -TypeDefinition @"
 using System;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 public class DisplayHelper {
     [DllImport("user32.dll")]
@@ -80,8 +84,34 @@ public class DisplayHelper {
         public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
     }
     public const int ENUM_CURRENT_SETTINGS = -1;
+
+    // Fast FNV-1a hash for bitmap comparison
+    public static long ComputeImageHash(Bitmap bmp, int exL, int exT, int exR, int exB) {
+        var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height),
+            ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try {
+            long hash = unchecked((long)0xcbf29ce484222325);
+            int stride = data.Stride;
+            int width = bmp.Width;
+            int height = bmp.Height;
+            IntPtr scan0 = data.Scan0;
+            for (int y = 0; y < height; y++) {
+                bool inExcludeY = (y >= exT && y < exB);
+                int rowOffset = y * stride;
+                for (int x = 0; x < width; x++) {
+                    if (inExcludeY && x >= exL && x < exR) continue;
+                    int pixel = Marshal.ReadInt32(scan0, rowOffset + x * 4);
+                    hash ^= pixel;
+                    hash *= 0x100000001b3L;
+                }
+            }
+            return hash;
+        } finally {
+            bmp.UnlockBits(data);
+        }
+    }
 }
-"@
+"@ -ReferencedAssemblies $drawingAsm,$primAsm
     [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     Topmost="True" AllowsTransparency="True" WindowStyle="None" Background="Transparent"
@@ -264,95 +294,48 @@ public class DisplayHelper {
     $script:encoderParams = [System.Drawing.Imaging.EncoderParameters]::new(1)
     $script:encoderParams.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new([System.Drawing.Imaging.Encoder]::Quality, 75L)
 
-    function Get-ImageHash($bmp, $excludeRect) {
-        # Black out the clock area for hash calculation
-        $g = $ms = $md5 = $null
-        try {
-            if ($excludeRect) {
-                $g = [System.Drawing.Graphics]::FromImage($bmp)
-                $g.FillRectangle([System.Drawing.Brushes]::Black,
-                    $excludeRect.Left, $excludeRect.Top,
-                    ($excludeRect.Right - $excludeRect.Left),
-                    ($excludeRect.Bottom - $excludeRect.Top))
-            }
-            $ms = [System.IO.MemoryStream]::new()
-            $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Bmp)
-            $md5 = [System.Security.Cryptography.MD5]::Create()
-            $hash = $md5.ComputeHash($ms.ToArray())
-            ([BitConverter]::ToString($hash) -replace '-','')
-        } finally {
-            if ($md5) { $md5.Dispose() }
-            if ($ms) { $ms.Dispose() }
-            if ($g) { $g.Dispose() }
-        }
-    }
 
     $recTimer = New-Object System.Windows.Threading.DispatcherTimer
     $recTimer.Interval = [TimeSpan]::FromMilliseconds([int](1000 / $FPS))
     $recTimer.Add_Tick({
         if (-not $script:recording) { return }
-        $bmp = $g = $thumb = $g2 = $masked = $null
-        $monBmps = @()
         try {
             $now = Get-Date
-            $bmp = New-Object System.Drawing.Bitmap($script:bounds.Width, $script:bounds.Height)
-            $g = [System.Drawing.Graphics]::FromImage($bmp)
             if ($script:selectedMonitors.Count -eq 1) {
                 # Single monitor: fast path
-                $g.CopyFromScreen($script:bounds.Location, [System.Drawing.Point]::Empty, $script:bounds.Size)
+                $script:captureG.CopyFromScreen($script:bounds.Location, [System.Drawing.Point]::Empty, $script:bounds.Size)
             } else {
-                # Multiple monitors: capture each and composite
+                # Multiple monitors: clear and capture each using pre-allocated resources
+                $script:captureG.Clear([System.Drawing.Color]::Black)
                 foreach ($idx in $script:selectedMonitors) {
-                    $monBounds = Get-PhysicalBounds $script:screens[$idx]
-                    $monBmp = New-Object System.Drawing.Bitmap($monBounds.Width, $monBounds.Height)
-                    $monBmps += $monBmp
-                    $monG = [System.Drawing.Graphics]::FromImage($monBmp)
-                    $monG.CopyFromScreen($monBounds.Location, [System.Drawing.Point]::Empty, $monBounds.Size)
-                    $monG.Dispose()
-                    $relX = $monBounds.Left - $script:bounds.Left
-                    $relY = $monBounds.Top - $script:bounds.Top
-                    $g.DrawImage($monBmp, $relX, $relY)
+                    $b = $script:monitorBounds[$idx]
+                    $script:monitorGs[$idx].CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+                    $relX = $b.Left - $script:bounds.Left
+                    $relY = $b.Top - $script:bounds.Top
+                    $script:captureG.DrawImage($script:monitorBmps[$idx], $relX, $relY)
                 }
-                foreach ($mb in $monBmps) { $mb.Dispose() }
-                $monBmps = @()
             }
-            $g.Dispose(); $g = $null
-            $thumb = New-Object System.Drawing.Bitmap($script:w, $script:h)
-            $g2 = [System.Drawing.Graphics]::FromImage($thumb)
-            $g2.DrawImage($bmp, 0, 0, $script:w, $script:h)
-            $g2.Dispose(); $g2 = $null
-            $bmp.Dispose(); $bmp = $null
+            $script:thumbG.DrawImage($script:captureBmp, 0, 0, $script:w, $script:h)
 
-            # Calculate exclude rectangle for clock window (scaled, relative to target monitor)
-            $excludeRect = @{
-                Left   = [int](($window.Left * $script:dpiScale - $script:bounds.Left) * $Scale)
-                Top    = [int](($window.Top * $script:dpiScale - $script:bounds.Top) * $Scale)
-                Right  = [int]((($window.Left + $window.ActualWidth) * $script:dpiScale - $script:bounds.Left) * $Scale)
-                Bottom = [int]((($window.Top + $window.ActualHeight) * $script:dpiScale - $script:bounds.Top) * $Scale)
-            }
+            # Calculate exclude rectangle for clock window (scaled, relative to capture region)
+            $exL = [int](($window.Left * $script:dpiScale - $script:bounds.Left) * $Scale)
+            $exT = [int](($window.Top * $script:dpiScale - $script:bounds.Top) * $Scale)
+            $exR = [int]((($window.Left + $window.ActualWidth) * $script:dpiScale - $script:bounds.Left) * $Scale)
+            $exB = [int]((($window.Top + $window.ActualHeight) * $script:dpiScale - $script:bounds.Top) * $Scale)
 
-            # Create masked copy for hash calculation
-            $masked = $thumb.Clone()
-            $currHash = Get-ImageHash $masked $excludeRect
+            $currHash = [DisplayHelper]::ComputeImageHash($script:thumbBmp, $exL, $exT, $exR, $exB)
 
             if ($currHash -ne $script:prevHash) {
                 $filename = $now.ToString("yyyyMMdd_HHmmss_ff")
-                $thumb.Save("$($script:outDir)\$filename.jpg", $script:jpegCodec, $script:encoderParams)
+                $script:thumbBmp.Save("$($script:outDir)\$filename.jpg", $script:jpegCodec, $script:encoderParams)
                 if ($SaveMasked) {
-                    $masked.Save("$($script:outDir)\${filename}_masked.jpg", $script:jpegCodec, $script:encoderParams)
+                    $script:maskedBmp.Save("$($script:outDir)\${filename}_masked.jpg", $script:jpegCodec, $script:encoderParams)
                 }
                 $script:saved++
                 $script:prevHash = $currHash
             }
         } catch {
             # Ignore capture errors (e.g., monitor disconnected)
-        } finally {
-            foreach ($mb in $monBmps) { if ($mb) { $mb.Dispose() } }
-            if ($masked) { $masked.Dispose() }
-            if ($thumb) { $thumb.Dispose() }
-            if ($g2) { $g2.Dispose() }
-            if ($bmp) { $bmp.Dispose() }
-            if ($g) { $g.Dispose() }
         }
     })
 
@@ -367,6 +350,25 @@ public class DisplayHelper {
             # Start recording
             $script:outDir = ".\ScreenCaptures\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
             New-Item -ItemType Directory -Path $script:outDir -Force | Out-Null
+            # Pre-allocate reusable bitmaps and graphics
+            $script:captureBmp = New-Object System.Drawing.Bitmap($script:bounds.Width, $script:bounds.Height)
+            $script:captureG = [System.Drawing.Graphics]::FromImage($script:captureBmp)
+            $script:thumbBmp = New-Object System.Drawing.Bitmap($script:w, $script:h)
+            $script:thumbG = [System.Drawing.Graphics]::FromImage($script:thumbBmp)
+            $script:maskedBmp = New-Object System.Drawing.Bitmap($script:w, $script:h)
+            $script:maskedG = [System.Drawing.Graphics]::FromImage($script:maskedBmp)
+            # Pre-allocate per-monitor bitmaps for multi-monitor capture
+            $script:monitorBmps = @{}
+            $script:monitorGs = @{}
+            $script:monitorBounds = @{}
+            if ($script:selectedMonitors.Count -gt 1) {
+                foreach ($idx in $script:selectedMonitors) {
+                    $b = Get-PhysicalBounds $script:screens[$idx]
+                    $script:monitorBounds[$idx] = $b
+                    $script:monitorBmps[$idx] = New-Object System.Drawing.Bitmap($b.Width, $b.Height)
+                    $script:monitorGs[$idx] = [System.Drawing.Graphics]::FromImage($script:monitorBmps[$idx])
+                }
+            }
             $script:recording = $true
             $script:saved = 0
             $script:prevHash = $null
@@ -376,6 +378,16 @@ public class DisplayHelper {
         } else {
             # Stop recording
             $recTimer.Stop()
+            # Dispose pre-allocated resources
+            foreach ($idx in $script:monitorGs.Keys) { $script:monitorGs[$idx].Dispose() }
+            foreach ($idx in $script:monitorBmps.Keys) { $script:monitorBmps[$idx].Dispose() }
+            $script:monitorGs = @{}; $script:monitorBmps = @{}; $script:monitorBounds = @{}
+            if ($script:maskedG) { $script:maskedG.Dispose(); $script:maskedG = $null }
+            if ($script:maskedBmp) { $script:maskedBmp.Dispose(); $script:maskedBmp = $null }
+            if ($script:thumbG) { $script:thumbG.Dispose(); $script:thumbG = $null }
+            if ($script:thumbBmp) { $script:thumbBmp.Dispose(); $script:thumbBmp = $null }
+            if ($script:captureG) { $script:captureG.Dispose(); $script:captureG = $null }
+            if ($script:captureBmp) { $script:captureBmp.Dispose(); $script:captureBmp = $null }
             $script:recording = $false; $script:monitorLabel.IsHitTestVisible = $true; $script:monitorLabel.Opacity = 1.0
             $btnToggle.Content = "● REC"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::White

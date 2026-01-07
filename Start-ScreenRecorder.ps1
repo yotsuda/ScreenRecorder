@@ -263,7 +263,7 @@ public class DisplayHelper {
             $currHash = Get-ImageHash $masked $excludeRect
 
             if ($currHash -ne $script:prevHash) {
-                $filename = $now.ToString("yyyyMMdd_HHmmss_f")
+                $filename = $now.ToString("yyyyMMdd_HHmmss_ff")
                 $thumb.Save("$($script:outDir)\$filename.jpg", $script:jpegCodec, $script:encoderParams)
                 if ($SaveMasked) {
                     $masked.Save("$($script:outDir)\${filename}_masked.jpg", $script:jpegCodec, $script:encoderParams)

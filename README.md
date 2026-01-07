@@ -52,7 +52,7 @@ Start-ScreenRecorder -SaveMasked
 
 Screenshots are saved to `./ScreenCaptures/yyyyMMdd_HHmmss/` as JPEG files (quality 75%).
 
-Filename format: `yyyyMMdd_HHmmss_f.jpg`
+Filename format: `yyyyMMdd_HHmmss_ff.jpg`
 
 ## Requirements
 

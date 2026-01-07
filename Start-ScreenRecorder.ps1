@@ -317,7 +317,7 @@ public class DisplayHelper {
     $window.ShowDialog()
 }
 
-# Standalone execution
+# Run only when invoked directly (not dot-sourced or imported as module)
 if ($MyInvocation.InvocationName -notin '.', '') {
     Start-ScreenRecorder @PSBoundParameters
 }

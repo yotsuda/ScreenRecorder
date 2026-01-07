@@ -8,7 +8,7 @@ if (-not $Background) {
     $exe = (Get-Process -Id $PID).Path
     $scriptPath = $MyInvocation.MyCommand.ScriptBlock.File
     if (-not $scriptPath) { $scriptPath = $PSCommandPath }
-    Start-Process $exe -ArgumentList "-WindowStyle Hidden -File `"$scriptPath`" -Background" -WindowStyle Hidden
+    Start-Process $exe -ArgumentList "-NoProfile -WindowStyle Hidden -File `"$scriptPath`" -Background" -WindowStyle Hidden
     return
 }
 

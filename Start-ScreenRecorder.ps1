@@ -155,10 +155,9 @@ public class DisplayHelper {
         $overlays = @()
         for ($i = 0; $i -lt $script:screens.Count; $i++) {
             $scr = $script:screens[$i]
-            $phys = Get-PhysicalBounds $scr
             $isSelected = ($i -eq $comboMonitor.SelectedIndex)
-            $wpfLeft = $phys.Left / $script:dpiScale
-            $wpfTop = $phys.Top / $script:dpiScale
+            $wpfLeft = $scr.Bounds.Left / $script:dpiScale
+            $wpfTop = $scr.Bounds.Top / $script:dpiScale
             $wpfWidth = $scr.Bounds.Width / $script:dpiScale
             $wpfHeight = $scr.Bounds.Height / $script:dpiScale
             [xml]$overlayXaml = @"

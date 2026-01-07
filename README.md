@@ -23,8 +23,8 @@ Or simply download and run `Start-ScreenRecorder.ps1` directly - no module insta
 # Basic usage - starts recorder with clock overlay
 Start-ScreenRecorder
 
-# Higher frame rate with 75% scale
-Start-ScreenRecorder -FPS 10 -Scale 0.75
+# Higher frame rate with custom quality
+Start-ScreenRecorder -FPS 10 -Scale 0.75 -Quality 50
 
 # Save masked images for debugging hash calculation
 Start-ScreenRecorder -SaveMasked
@@ -45,7 +45,8 @@ Start-ScreenRecorder -SaveMasked
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | -FPS | int | 2 | Frames per second |
-| -Scale | double | 1.0 | Image scale (0.1-1.0) |
+| -Scale | double | 0.75 | Image scale (0.1-1.0) |
+| -Quality | int | 75 | JPEG quality (1-100) |
 | -SaveMasked | switch | - | Save masked images for debugging |
 
 ## Output

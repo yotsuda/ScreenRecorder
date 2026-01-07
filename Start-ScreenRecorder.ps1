@@ -12,7 +12,8 @@
 param(
     [switch]$Background,
     [int]$FPS = 2,
-    [double]$Scale = 1.0,
+    [double]$Scale = 0.75,
+    [int]$Quality = 75,
     [switch]$SaveMasked
 )
 
@@ -45,8 +46,8 @@ function Start-ScreenRecorder {
         [Parameter(DontShow)]
         [switch]$Background,
         [int]$FPS = 2,
-        [ValidateRange(0.1, 1.0)]
-        [double]$Scale = 1.0,
+        [double]$Scale = 0.75,
+        [int]$Quality = 75,
         [switch]$SaveMasked
     )
 
@@ -54,7 +55,7 @@ function Start-ScreenRecorder {
         $exe = (Get-Process -Id $PID).Path
         $scriptPath = $MyInvocation.MyCommand.ScriptBlock.File
         if (-not $scriptPath) { $scriptPath = $PSCommandPath }
-        $procArgs = "-NoProfile -WindowStyle Hidden -File `"$scriptPath`" -Background -FPS $FPS -Scale $Scale"
+        $procArgs = "-NoProfile -WindowStyle Hidden -File `"$scriptPath`" -Background -FPS $FPS -Scale $Scale -Quality $Quality"
         if ($SaveMasked) { $procArgs += " -SaveMasked" }
         Start-Process $exe -ArgumentList $procArgs -WindowStyle Hidden
         return
@@ -302,7 +303,7 @@ public class DisplayHelper {
     $script:jpegCodec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq "image/jpeg" }
     if (-not $script:jpegCodec) { throw "JPEG encoder not found" }
     $script:encoderParams = [System.Drawing.Imaging.EncoderParameters]::new(1)
-    $script:encoderParams.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new([System.Drawing.Imaging.Encoder]::Quality, 75L)
+    $script:encoderParams.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new([System.Drawing.Imaging.Encoder]::Quality, [long]$Quality)
 
 
     $recTimer = New-Object System.Windows.Threading.DispatcherTimer

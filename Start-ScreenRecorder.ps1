@@ -1,5 +1,5 @@
 ﻿<#PSScriptInfo
-.VERSION 0.2.0
+.VERSION 0.3.0
 .GUID d47eab76-de84-454d-aead-8b61ed3335eb
 .AUTHOR Yoshifumi Tsuda
 .COPYRIGHT Copyright (c) 2025 Yoshifumi Tsuda. MIT License.
@@ -106,8 +106,8 @@ public class DisplayHelper {
         return rect;
     }
 
-    // Fast FNV-1a hash for bitmap comparison using unsafe pointer access
-    public static unsafe long ComputeImageHash(Bitmap bmp, int exL, int exT, int exR, int exB) {
+    // Fast FNV-1a hash for bitmap comparison
+    public static long ComputeImageHash(Bitmap bmp, int exL, int exT, int exR, int exB) {
         var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height),
             ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
         try {
@@ -115,14 +115,14 @@ public class DisplayHelper {
             int stride = data.Stride;
             int width = bmp.Width;
             int height = bmp.Height;
-            byte* scan0 = (byte*)data.Scan0;
+            IntPtr scan0 = data.Scan0;
             for (int y = 0; y < height; y++) {
-                int* row = (int*)(scan0 + y * stride);
+                IntPtr row = IntPtr.Add(scan0, y * stride);
                 if (y >= exT && y < exB) {
-                    for (int x = 0; x < exL; x++) { hash ^= row[x]; hash *= 0x100000001b3L; }
-                    for (int x = exR; x < width; x++) { hash ^= row[x]; hash *= 0x100000001b3L; }
+                    for (int x = 0; x < exL; x++) { hash ^= Marshal.ReadInt32(row, x * 4); hash *= 0x100000001b3L; }
+                    for (int x = exR; x < width; x++) { hash ^= Marshal.ReadInt32(row, x * 4); hash *= 0x100000001b3L; }
                 } else {
-                    for (int x = 0; x < width; x++) { hash ^= row[x]; hash *= 0x100000001b3L; }
+                    for (int x = 0; x < width; x++) { hash ^= Marshal.ReadInt32(row, x * 4); hash *= 0x100000001b3L; }
                 }
             }
             return hash;
@@ -284,7 +284,7 @@ public class BackgroundRecorder {
         }
     }
 }
-"@ -ReferencedAssemblies (@($drawingAsm,$primAsm) + @($winCoreAsm | Where-Object { $_ })) -CompilerOptions '/unsafe'
+"@ -ReferencedAssemblies (@($drawingAsm,$primAsm) + @($winCoreAsm | Where-Object { $_ }))
     [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     Topmost="True" AllowsTransparency="True" WindowStyle="None" Background="Transparent"

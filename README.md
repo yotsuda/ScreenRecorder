@@ -6,7 +6,7 @@ Screen capture tool with clock overlay for debugging and log correlation. No ext
 
 - **Clock Overlay** - Always-on-top transparent window showing current time (HH:mm:ss.f)
 - **Smart Capture** - Only saves frames when screen content changes (excludes clock area from comparison)
-- **Multi-Monitor Support** - Select which monitor to capture
+- **Multi-Monitor Support** - Capture single or multiple monitors simultaneously
 - **Scalable UI** - Mouse wheel to resize the clock display
 
 ## Installation
@@ -38,7 +38,7 @@ Start-ScreenRecorder -SaveMasked
 | **Mouse wheel** | Resize clock display |
 | **Drag** | Move clock window |
 | **Right-click** | Exit menu |
-| **Monitor dropdown** | Select capture target (multi-monitor) |
+| **Monitor label** | Click to select monitors (multi-monitor) |
 
 ### Parameters
 
@@ -51,7 +51,7 @@ Start-ScreenRecorder -SaveMasked
 
 ## Output
 
-Screenshots are saved to `./ScreenCaptures/yyyyMMdd_HHmmss/` as JPEG files (quality 75%).
+Screenshots are saved to `./ScreenCaptures/yyyyMMdd_HHmmss/` as JPEG files.
 
 Filename format: `yyyyMMdd_HHmmss_ff.jpg`
 

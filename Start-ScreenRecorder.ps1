@@ -1,5 +1,5 @@
 ﻿<#PSScriptInfo
-.VERSION 0.3.0
+.VERSION 0.4.0
 .GUID d47eab76-de84-454d-aead-8b61ed3335eb
 .AUTHOR Yoshifumi Tsuda
 .COPYRIGHT Copyright (c) 2025 Yoshifumi Tsuda. MIT License.
@@ -449,8 +449,10 @@ public class BackgroundRecorder {
 
         $script:monitorLabel.ContextMenu = $script:monitorMenu
         $script:monitorLabel.Add_MouseLeftButtonDown({
+            param($sender, $e)
             $script:monitorMenu.PlacementTarget = $script:monitorLabel
             $script:monitorMenu.IsOpen = $true
+            $e.Handled = $true
         })
     }
 

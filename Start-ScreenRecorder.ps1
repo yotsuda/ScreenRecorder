@@ -63,6 +63,9 @@ function Start-ScreenRecorder {
     Add-Type -AssemblyName PresentationFramework,System.Windows.Forms,System.Drawing
     $drawingAsm = [System.Drawing.Bitmap].Assembly.Location
     $primAsm = [System.Drawing.Rectangle].Assembly.Location
+    $winCoreAsm = [System.Drawing.Bitmap].Assembly.GetReferencedAssemblies() |
+        Where-Object { $_.Name -eq 'System.Private.Windows.Core' } |
+        ForEach-Object { [System.Reflection.Assembly]::Load($_).Location }
     Add-Type -TypeDefinition @"
 using System;
 using System.Drawing;
@@ -87,6 +90,21 @@ public class DisplayHelper {
         public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
     }
     public const int ENUM_CURRENT_SETTINGS = -1;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT { public int Left, Top, Right, Bottom; }
+
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmGetWindowAttribute(IntPtr hWnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
+
+    public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+
+    // Get physical window rect using DWM (always returns physical pixels)
+    public static RECT GetPhysicalWindowRect(IntPtr hWnd) {
+        RECT rect;
+        DwmGetWindowAttribute(hWnd, DWMWA_EXTENDED_FRAME_BOUNDS, out rect, Marshal.SizeOf(typeof(RECT)));
+        return rect;
+    }
 
     // Fast FNV-1a hash for bitmap comparison using unsafe pointer access
     public static unsafe long ComputeImageHash(Bitmap bmp, int exL, int exT, int exR, int exB) {
@@ -117,9 +135,11 @@ public class DisplayHelper {
 public class BackgroundRecorder {
     private Task _task;
     private volatile bool _running;
-    private volatile int _exL, _exT, _exR, _exB;
     private int _intervalMs;
     private string _outDir;
+    private bool _saveMasked;
+    private double _scale;
+    private IntPtr _windowHandle;
     private ImageCodecInfo _jpegCodec;
     private EncoderParameters _encoderParams;
     private Bitmap _captureBmp, _thumbBmp;
@@ -137,13 +157,16 @@ public class BackgroundRecorder {
     public int Saved => _saved;
     public string LastError => _lastError;
 
-    public void Start(Rectangle bounds, Rectangle[] monitorBounds, int thumbW, int thumbH, int fps, int quality, string outDir) {
+    public void Start(Rectangle bounds, Rectangle[] monitorBounds, int thumbW, int thumbH, int fps, int quality, string outDir, bool saveMasked, double scale, IntPtr windowHandle) {
         _bounds = bounds;
         _monitorBounds = monitorBounds;
         _thumbW = thumbW;
         _thumbH = thumbH;
         _intervalMs = 1000 / fps;
         _outDir = outDir;
+        _saveMasked = saveMasked;
+        _scale = scale;
+        _windowHandle = windowHandle;
         _prevHash = 0;
         _saved = 0;
 
@@ -195,19 +218,38 @@ public class BackgroundRecorder {
         if (_captureBmp != null) { _captureBmp.Dispose(); _captureBmp = null; }
     }
 
-    public void UpdateExcludeRect(int l, int t, int r, int b) {
-        _exL = l; _exT = t; _exR = r; _exB = b;
-    }
-
     private void RecordLoop() {
+        DisplayHelper.RECT _prevRect = new DisplayHelper.RECT();
+        bool firstFrame = true;
+        
         while (_running) {
             var start = DateTime.Now;
             try {
+                // Get exclude rect BEFORE capture (more accurate timing)
+                var rect = DisplayHelper.GetPhysicalWindowRect(_windowHandle);
+                int exL = (int)((rect.Left - _bounds.Left) * _scale);
+                int exT = (int)((rect.Top - _bounds.Top) * _scale);
+                int exR = (int)((rect.Right - _bounds.Left) * _scale);
+                int exB = (int)((rect.Bottom - _bounds.Top) * _scale);
+                
+                // Skip if window is moving (rect changed since last frame)
+                bool isMoving = !firstFrame && (rect.Left != _prevRect.Left || rect.Top != _prevRect.Top || 
+                                                 rect.Right != _prevRect.Right || rect.Bottom != _prevRect.Bottom);
+                _prevRect = rect;
+                firstFrame = false;
+                
+                if (isMoving) {
+                    // Skip this frame - window is moving
+                    var skipElapsed = (int)(DateTime.Now - start).TotalMilliseconds;
+                    int skipSleep = _intervalMs - skipElapsed;
+                    if (skipSleep > 0) Task.Delay(skipSleep).Wait();
+                    continue;
+                }
+                
+                // Capture screen
                 if (_monitorBounds == null || _monitorBounds.Length == 1) {
-                    // Single monitor: fast path
                     _captureG.CopyFromScreen(_bounds.Location, Point.Empty, _bounds.Size);
                 } else {
-                    // Multiple monitors: capture each and composite
                     _captureG.Clear(Color.Black);
                     for (int i = 0; i < _monitorBounds.Length; i++) {
                         var b = _monitorBounds[i];
@@ -217,12 +259,20 @@ public class BackgroundRecorder {
                         _captureG.DrawImage(_monitorBmps[i], relX, relY);
                     }
                 }
+                
                 _thumbG.DrawImage(_captureBmp, 0, 0, _thumbW, _thumbH);
 
-                long hash = DisplayHelper.ComputeImageHash(_thumbBmp, _exL, _exT, _exR, _exB);
+                long hash = DisplayHelper.ComputeImageHash(_thumbBmp, exL, exT, exR, exB);
                 if (hash != _prevHash) {
                     string filename = DateTime.Now.ToString("yyyyMMdd_HHmmss_ff");
                     _thumbBmp.Save(System.IO.Path.Combine(_outDir, filename + ".jpg"), _jpegCodec, _encoderParams);
+                    if (_saveMasked) {
+                        using (var maskedBmp = new Bitmap(_thumbBmp))
+                        using (var g = Graphics.FromImage(maskedBmp)) {
+                            g.FillRectangle(Brushes.Black, exL, exT, exR - exL, exB - exT);
+                            maskedBmp.Save(System.IO.Path.Combine(_outDir, filename + "_masked.jpg"), _jpegCodec, _encoderParams);
+                        }
+                    }
                     _saved++;
                     _prevHash = hash;
                 }
@@ -234,7 +284,7 @@ public class BackgroundRecorder {
         }
     }
 }
-"@ -ReferencedAssemblies $drawingAsm,$primAsm -CompilerOptions '/unsafe'
+"@ -ReferencedAssemblies (@($drawingAsm,$primAsm) + @($winCoreAsm | Where-Object { $_ })) -CompilerOptions '/unsafe'
     [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     Topmost="True" AllowsTransparency="True" WindowStyle="None" Background="Transparent"
@@ -413,17 +463,8 @@ public class BackgroundRecorder {
     # Background recorder instance
     $script:recorder = [BackgroundRecorder]::new()
 
-    # Timer for updating exclude rectangle (UI thread only)
-    $excludeTimer = New-Object System.Windows.Threading.DispatcherTimer
-    $excludeTimer.Interval = [TimeSpan]::FromMilliseconds(50)
-    $excludeTimer.Add_Tick({
-        if (-not $script:recording) { return }
-        $exL = [int](($window.Left * $script:dpiScale - $script:bounds.Left) * $Scale)
-        $exT = [int](($window.Top * $script:dpiScale - $script:bounds.Top) * $Scale)
-        $exR = [int]((($window.Left + $window.ActualWidth) * $script:dpiScale - $script:bounds.Left) * $Scale)
-        $exB = [int]((($window.Top + $window.ActualHeight) * $script:dpiScale - $script:bounds.Top) * $Scale)
-        $script:recorder.UpdateExcludeRect($exL, $exT, $exR, $exB)
-    })
+    # Get window handle for physical coordinate calculation
+    $windowHelper = [System.Windows.Interop.WindowInteropHelper]::new($window)
 
     $btnToggle.Add_Click({
         if (-not $script:recording) {
@@ -441,15 +482,13 @@ public class BackgroundRecorder {
             foreach ($idx in $script:selectedMonitors) {
                 $monitorBoundsArray += Get-PhysicalBounds $script:screens[$idx]
             }
-            $script:recorder.Start($script:bounds, [System.Drawing.Rectangle[]]$monitorBoundsArray, $script:w, $script:h, $FPS, $Quality, (Resolve-Path $script:outDir).Path)
+            $script:recorder.Start($script:bounds, [System.Drawing.Rectangle[]]$monitorBoundsArray, $script:w, $script:h, $FPS, $Quality, (Resolve-Path $script:outDir).Path, $SaveMasked, $Scale, $windowHelper.Handle)
             $script:recording = $true
             $btnToggle.Content = "■ STOP"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::Red
             $script:monitorLabel.IsHitTestVisible = $false; $script:monitorLabel.Opacity = 0.5
-            $excludeTimer.Start()
         } else {
             # Stop recording
-            $excludeTimer.Stop()
             $script:recorder.Stop()
             $script:saved = $script:recorder.Saved
             $script:recording = $false
@@ -465,7 +504,7 @@ public class BackgroundRecorder {
     $clockTimer.Interval = [TimeSpan]::FromMilliseconds(100)
     $clockTimer.Add_Tick({ $clock.Text = (Get-Date).ToString("HH:mm:ss.f") })
     $clockTimer.Start()
-    $window.Add_Closed({ $clockTimer.Stop(); $recTimer.Stop() })
+    $window.Add_Closed({ $clockTimer.Stop(); if ($script:recording) { $script:recorder.Stop() } })
     $window.ShowDialog()
 }
 

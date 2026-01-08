@@ -31,7 +31,7 @@ function Start-ScreenRecorder {
     .PARAMETER FPS
         Frames per second for capture. Default is 2.
     .PARAMETER Scale
-        Scale factor for captured images (0.1 to 1.0). Default is 1.0.
+        Scale factor for captured images (0.1 to 1.0). Default is 0.75.
     .PARAMETER SaveMasked
         Saves masked images (with clock area blacked out) for debugging.
     .EXAMPLE
@@ -334,7 +334,6 @@ public class BackgroundRecorder {
 
     # Monitor setup
     $script:screens = [System.Windows.Forms.Screen]::AllScreens
-    $script:targetScreen = [System.Windows.Forms.Screen]::PrimaryScreen
     $script:dpiScale = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width / [System.Windows.SystemParameters]::VirtualScreenWidth
 
     function Get-PhysicalBounds($screen) {
@@ -447,7 +446,6 @@ public class BackgroundRecorder {
             $script:monitorMenu.Items.Add($menuItem) | Out-Null
         }
 
-
         $script:monitorLabel.ContextMenu = $script:monitorMenu
         $script:monitorLabel.Add_MouseLeftButtonDown({
             $script:monitorMenu.PlacementTarget = $script:monitorLabel
@@ -457,7 +455,6 @@ public class BackgroundRecorder {
 
     $script:recording = $false
     $script:outDir = $null
-    $script:saved = 0
     Update-CaptureRegion
 
     # Background recorder instance
@@ -490,7 +487,6 @@ public class BackgroundRecorder {
         } else {
             # Stop recording
             $script:recorder.Stop()
-            $script:saved = $script:recorder.Saved
             $script:recording = $false
             $script:monitorLabel.IsHitTestVisible = $true; $script:monitorLabel.Opacity = 1.0
             $btnToggle.Content = "● REC"
@@ -498,7 +494,6 @@ public class BackgroundRecorder {
             Start-Process explorer $script:outDir
         }
     })
-
 
     $clockTimer = New-Object System.Windows.Threading.DispatcherTimer
     $clockTimer.Interval = [TimeSpan]::FromMilliseconds(100)

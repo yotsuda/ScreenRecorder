@@ -154,8 +154,8 @@ public class BackgroundRecorder {
     private Bitmap[] _monitorBmps;
     private Graphics[] _monitorGs;
 
-    public int Saved => _saved;
-    public string LastError => _lastError;
+    public int Saved { get { return _saved; } }
+    public string LastError { get { return _lastError; } }
 
     public void Start(Rectangle bounds, Rectangle[] monitorBounds, int thumbW, int thumbH, int fps, int quality, string outDir, bool saveMasked, double scale, IntPtr windowHandle) {
         _bounds = bounds;
@@ -318,6 +318,7 @@ public class BackgroundRecorder {
     $menuExit.Add_Click({ $window.Close() })
     $menuExit.Parent.Add_KeyDown({ param($s,$e) if ($e.Key -eq 'X') { $window.Close() } })
     $window.Add_MouseLeftButtonDown({ $window.DragMove() })
+    $window.Add_Deactivated({ $window.Topmost = $true })
     $window.Add_MouseWheel({ param($s,$e)
         $size = $clock.FontSize + ($e.Delta / 30)
         if ($size -ge 12 -and $size -le 200) {

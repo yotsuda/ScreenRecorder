@@ -499,7 +499,7 @@ public class BackgroundRecorder {
     $clockTimer.Interval = [TimeSpan]::FromMilliseconds(100)
     $clockTimer.Add_Tick({ $clock.Text = (Get-Date).ToString("HH:mm:ss.f") })
     $clockTimer.Start()
-    $window.Add_Closed({ $clockTimer.Stop(); if ($script:recording) { $script:recorder.Stop() } })
+    $window.Add_Closed({ $clockTimer.Stop(); if ($script:recording) { $script:recorder.Stop(); Start-Process explorer $script:outDir } })
     $window.ShowDialog()
 }
 

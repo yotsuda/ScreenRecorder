@@ -304,7 +304,7 @@ public class BackgroundRecorder {
     [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     Topmost="True" AllowsTransparency="True" WindowStyle="None" Background="Transparent"
-    SizeToContent="WidthAndHeight" Left="20" Top="20">
+    SizeToContent="WidthAndHeight" ResizeMode="NoResize" Left="20" Top="20">
     <Window.ContextMenu>
         <ContextMenu>
             <MenuItem Name="MenuExit">

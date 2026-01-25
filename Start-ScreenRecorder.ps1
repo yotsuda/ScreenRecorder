@@ -157,7 +157,16 @@ public class BackgroundRecorder {
     public int Saved { get { return _saved; } }
     public string LastError { get { return _lastError; } }
 
-    public void Start(Rectangle bounds, Rectangle[] monitorBounds, int thumbW, int thumbH, int fps, int quality, string outDir, bool saveMasked, double scale, IntPtr windowHandle) {
+    public bool Start(Rectangle bounds, Rectangle[] monitorBounds, int thumbW, int thumbH, int fps, int quality, string outDir, bool saveMasked, double scale, IntPtr windowHandle) {
+        // Validate parameters
+        if (bounds.Width <= 0 || bounds.Height <= 0 || thumbW <= 0 || thumbH <= 0) {
+            _lastError = "Invalid dimensions: bounds=" + bounds.Width + "x" + bounds.Height + ", thumb=" + thumbW + "x" + thumbH;
+            return false;
+        }
+
+        // Cleanup any previous resources
+        Stop();
+
         _bounds = bounds;
         _monitorBounds = monitorBounds;
         _thumbW = thumbW;
@@ -170,19 +179,25 @@ public class BackgroundRecorder {
         _prevHash = 0;
         _saved = 0;
 
-        _captureBmp = new Bitmap(bounds.Width, bounds.Height);
-        _captureG = Graphics.FromImage(_captureBmp);
-        _thumbBmp = new Bitmap(thumbW, thumbH);
-        _thumbG = Graphics.FromImage(_thumbBmp);
+        try {
+            _captureBmp = new Bitmap(bounds.Width, bounds.Height);
+            _captureG = Graphics.FromImage(_captureBmp);
+            _thumbBmp = new Bitmap(thumbW, thumbH);
+            _thumbG = Graphics.FromImage(_thumbBmp);
 
-        // Allocate per-monitor bitmaps for multi-monitor capture
-        if (_monitorBounds != null && _monitorBounds.Length > 1) {
-            _monitorBmps = new Bitmap[_monitorBounds.Length];
-            _monitorGs = new Graphics[_monitorBounds.Length];
-            for (int i = 0; i < _monitorBounds.Length; i++) {
-                _monitorBmps[i] = new Bitmap(_monitorBounds[i].Width, _monitorBounds[i].Height);
-                _monitorGs[i] = Graphics.FromImage(_monitorBmps[i]);
+            // Allocate per-monitor bitmaps for multi-monitor capture
+            if (_monitorBounds != null && _monitorBounds.Length > 1) {
+                _monitorBmps = new Bitmap[_monitorBounds.Length];
+                _monitorGs = new Graphics[_monitorBounds.Length];
+                for (int i = 0; i < _monitorBounds.Length; i++) {
+                    _monitorBmps[i] = new Bitmap(_monitorBounds[i].Width, _monitorBounds[i].Height);
+                    _monitorGs[i] = Graphics.FromImage(_monitorBmps[i]);
+                }
             }
+        } catch (Exception ex) {
+            _lastError = "Bitmap init failed: " + ex.Message;
+            Stop();
+            return false;
         }
 
         _jpegCodec = null;
@@ -194,6 +209,7 @@ public class BackgroundRecorder {
 
         _running = true;
         _task = Task.Run((Action)RecordLoop);
+        return true;
     }
 
     public void Stop() {
@@ -482,7 +498,12 @@ public class BackgroundRecorder {
             foreach ($idx in $script:selectedMonitors) {
                 $monitorBoundsArray += Get-PhysicalBounds $script:screens[$idx]
             }
-            $script:recorder.Start($script:bounds, [System.Drawing.Rectangle[]]$monitorBoundsArray, $script:w, $script:h, $FPS, $Quality, (Resolve-Path $script:outDir).Path, $SaveMasked, $Scale, $windowHelper.Handle)
+            $started = $script:recorder.Start($script:bounds, [System.Drawing.Rectangle[]]$monitorBoundsArray, $script:w, $script:h, $FPS, $Quality, (Resolve-Path $script:outDir).Path, $SaveMasked, $Scale, $windowHelper.Handle)
+            if (-not $started) {
+                [System.Windows.MessageBox]::Show("Recording failed: $($script:recorder.LastError)", "Error", "OK", "Error")
+                Remove-Item -Path $script:outDir -Force -ErrorAction SilentlyContinue
+                return
+            }
             $script:recording = $true
             $btnToggle.Content = "■ STOP"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::Red

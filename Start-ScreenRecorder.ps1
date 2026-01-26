@@ -2,7 +2,7 @@
 .VERSION 0.6.0
 .GUID d47eab76-de84-454d-aead-8b61ed3335eb
 .AUTHOR Yoshifumi Tsuda
-.COPYRIGHT Copyright (c) 2025 Yoshifumi Tsuda. MIT License.
+.COPYRIGHT Copyright (c) 2025-2026 Yoshifumi Tsuda. MIT License.
 .TAGS Screen Capture Recording Debug Screenshot Clock
 .LICENSEURI https://github.com/yotsuda/ScreenRecorder/blob/master/LICENSE
 .PROJECTURI https://github.com/yotsuda/ScreenRecorder

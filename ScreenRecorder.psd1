@@ -27,7 +27,7 @@ Author = 'Yoshifumi Tsuda'
 CompanyName = ''
 
 # Copyright statement for this module
-Copyright = 'Copyright (c) 2025 Yoshifumi Tsuda. MIT License.'
+Copyright = 'Copyright (c) 2025-2026 Yoshifumi Tsuda. MIT License.'
 
 # Description of the functionality provided by this module
 Description = 'Screen capture tool with clock overlay for debugging and log correlation. No external dependencies required. Can be run directly without module installation.'

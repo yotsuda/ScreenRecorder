@@ -1,5 +1,5 @@
 ﻿<#PSScriptInfo
-.VERSION 0.5.0
+.VERSION 0.6.0
 .GUID d47eab76-de84-454d-aead-8b61ed3335eb
 .AUTHOR Yoshifumi Tsuda
 .COPYRIGHT Copyright (c) 2025 Yoshifumi Tsuda. MIT License.
@@ -323,7 +323,11 @@ public class BackgroundRecorder {
         <StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <TextBlock Name="Clock" Foreground="White" FontSize="32" FontFamily="Consolas" VerticalAlignment="Center"/>
-                <Button Name="BtnToggle" Content="● REC" Width="45" Height="22" FontSize="11" Margin="8,0,0,0" Background="#AA444444" Foreground="White" BorderThickness="0" Padding="0" VerticalAlignment="Center"/>
+                <StackPanel Margin="8,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Name="RecSpacer" Height="14"/>
+                    <Button Name="BtnToggle" Content="● REC" Width="45" Height="22" FontSize="11" Background="#AA444444" Foreground="White" BorderThickness="0" Padding="0"/>
+                    <TextBlock Name="RecCounter" Text="0" Foreground="#FF6666" FontSize="11" Height="14" TextAlignment="Right" Visibility="Hidden"/>
+                </StackPanel>
                 <TextBlock Name="MonitorLabel" Foreground="White" FontSize="10" Margin="4,0,0,0" VerticalAlignment="Center" Cursor="Hand" Visibility="Collapsed"/>
             </StackPanel>
         </StackPanel>
@@ -334,6 +338,8 @@ public class BackgroundRecorder {
     $clock = $window.FindName("Clock")
     $btnToggle = $window.FindName("BtnToggle")
     $mainBorder = $window.FindName("MainBorder")
+    $recCounter = $window.FindName("RecCounter")
+    $recSpacer = $window.FindName("RecSpacer")
     $script:monitorLabel = $window.FindName("MonitorLabel")
     $menuExit = $window.FindName("MenuExit")
     $menuInvisible = $window.FindName("MenuInvisible")
@@ -357,6 +363,7 @@ public class BackgroundRecorder {
             $btnToggle.Width = $size * 1.4
             $btnToggle.Height = $size * 0.7
             $btnToggle.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
+            $recCounter.FontSize = $size * 0.35; $recCounter.Height = $size * 0.45; $recSpacer.Height = $size * 0.45
             $script:monitorLabel.FontSize = $size * 0.3
             $script:monitorLabel.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
             $mainBorder.Padding = [System.Windows.Thickness]::new($size * 0.3, $size * 0.2, $size * 0.3, $size * 0.2)
@@ -522,11 +529,13 @@ public class BackgroundRecorder {
             $btnToggle.Content = "■ STOP"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::Red
             $script:monitorLabel.IsHitTestVisible = $false; $script:monitorLabel.Opacity = 0.5
+            $recCounter.Text = "0"; $recCounter.Visibility = "Visible"
         } else {
             # Stop recording
             $script:recorder.Stop()
             $script:recording = $false
             $script:monitorLabel.IsHitTestVisible = $true; $script:monitorLabel.Opacity = 1.0
+            $recCounter.Visibility = "Hidden"
             $btnToggle.Content = "● REC"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::White
             Start-Process explorer $script:outDir
@@ -535,7 +544,7 @@ public class BackgroundRecorder {
 
     $clockTimer = New-Object System.Windows.Threading.DispatcherTimer
     $clockTimer.Interval = [TimeSpan]::FromMilliseconds(100)
-    $clockTimer.Add_Tick({ $clock.Text = (Get-Date).ToString("HH:mm:ss.f") })
+    $clockTimer.Add_Tick({ $clock.Text = (Get-Date).ToString("HH:mm:ss.f"); if ($script:recording) { $recCounter.Text = $script:recorder.Saved } })
     $clockTimer.Start()
     $window.Add_Closed({ $clockTimer.Stop(); if ($script:recording) { $script:recorder.Stop(); Start-Process explorer $script:outDir } })
     $window.ShowDialog()

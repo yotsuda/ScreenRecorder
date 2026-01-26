@@ -8,6 +8,8 @@ Screen capture tool with clock overlay for debugging and log correlation. No ext
 - **Smart Capture** - Only saves frames when screen content changes (excludes clock area from comparison)
 - **Multi-Monitor Support** - Capture single or multiple monitors simultaneously
 - **Scalable UI** - Mouse wheel to resize the clock display
+- **Auto-hide** - Clock window becomes transparent when not hovered
+- **Settings Overlay** - Quality and Scale settings are shown on the first captured frame
 
 ## Installation
 
@@ -37,7 +39,9 @@ Start-ScreenRecorder -SaveMasked
 | **REC button** | Start/stop recording |
 | **Mouse wheel** | Resize clock display |
 | **Drag** | Move clock window |
-| **Right-click** | Exit menu |
+| **Right-click** | Context menu (Auto-hide, Quality, Scale, Exit) |
+| **A key** | Toggle auto-hide mode |
+| **X key** | Exit |
 | **Monitor label** | Click to select monitors (multi-monitor) |
 
 ### Parameters

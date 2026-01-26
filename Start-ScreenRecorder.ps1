@@ -303,10 +303,15 @@ public class BackgroundRecorder {
 "@ -ReferencedAssemblies (@($drawingAsm,$primAsm) + @($winCoreAsm | Where-Object { $_ }))
     [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    Topmost="True" AllowsTransparency="True" WindowStyle="None" Background="Transparent"
+    Topmost="True" AllowsTransparency="True" WindowStyle="None" Background="#01000000"
     SizeToContent="WidthAndHeight" ResizeMode="NoResize" Left="20" Top="20">
     <Window.ContextMenu>
         <ContextMenu>
+            <MenuItem Name="MenuInvisible" IsCheckable="True">
+                <MenuItem.Header>
+                    <TextBlock><Underline>A</Underline>uto-hide</TextBlock>
+                </MenuItem.Header>
+            </MenuItem>
             <MenuItem Name="MenuExit">
                 <MenuItem.Header>
                     <TextBlock>E<Underline>x</Underline>it</TextBlock>
@@ -331,10 +336,19 @@ public class BackgroundRecorder {
     $mainBorder = $window.FindName("MainBorder")
     $script:monitorLabel = $window.FindName("MonitorLabel")
     $menuExit = $window.FindName("MenuExit")
+    $menuInvisible = $window.FindName("MenuInvisible")
+    $script:invisible = $false
     $menuExit.Add_Click({ $window.Close() })
-    $menuExit.Parent.Add_KeyDown({ param($s,$e) if ($e.Key -eq 'X') { $window.Close() } })
+    $menuInvisible.Add_Checked({ $script:invisible = $true; $mainBorder.Opacity = 0 })
+    $menuInvisible.Add_Unchecked({ $script:invisible = $false; $mainBorder.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $null); $mainBorder.Opacity = 1 })
+    $menuExit.Parent.Add_KeyDown({ param($s,$e)
+        if ($e.Key -eq 'X') { $window.Close() }
+        if ($e.Key -eq 'A') { $menuInvisible.IsChecked = -not $menuInvisible.IsChecked }
+    })
     $window.Add_MouseLeftButtonDown({ $window.DragMove() })
     $window.Add_Deactivated({ $window.Topmost = $true })
+    $window.Add_MouseEnter({ if ($script:invisible) { $mainBorder.BeginAnimation([System.Windows.UIElement]::OpacityProperty, [System.Windows.Media.Animation.DoubleAnimation]::new(1, [TimeSpan]::FromMilliseconds(100))) } })
+    $window.Add_MouseLeave({ if ($script:invisible) { $mainBorder.BeginAnimation([System.Windows.UIElement]::OpacityProperty, [System.Windows.Media.Animation.DoubleAnimation]::new(0, [TimeSpan]::FromMilliseconds(100))) } })
     $window.Add_MouseWheel({ param($s,$e)
         $size = $clock.FontSize + ($e.Delta / 30)
         if ($size -ge 12 -and $size -le 200) {

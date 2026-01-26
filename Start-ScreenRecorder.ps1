@@ -149,6 +149,8 @@ public class BackgroundRecorder {
     private long _prevHash;
     private int _saved;
     private string _lastError;
+    private int _quality;
+    private volatile bool _showOverlay;
     // Multi-monitor support
     private Rectangle[] _monitorBounds;
     private Bitmap[] _monitorBmps;
@@ -156,6 +158,7 @@ public class BackgroundRecorder {
 
     public int Saved { get { return _saved; } }
     public string LastError { get { return _lastError; } }
+    public void MarkSettingsChanged(int quality) { _quality = quality; _encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, (long)quality); _showOverlay = true; }
 
     public bool Start(Rectangle bounds, Rectangle[] monitorBounds, int thumbW, int thumbH, int fps, int quality, string outDir, bool saveMasked, double scale, IntPtr windowHandle) {
         // Validate parameters
@@ -178,6 +181,7 @@ public class BackgroundRecorder {
         _windowHandle = windowHandle;
         _prevHash = 0;
         _saved = 0;
+        _quality = quality;
 
         try {
             _captureBmp = new Bitmap(bounds.Width, bounds.Height);
@@ -279,8 +283,47 @@ public class BackgroundRecorder {
                 _thumbG.DrawImage(_captureBmp, 0, 0, _thumbW, _thumbH);
 
                 long hash = DisplayHelper.ComputeImageHash(_thumbBmp, exL, exT, exR, exB);
-                if (hash != _prevHash) {
+                if (hash != _prevHash || _showOverlay) {
                     string filename = DateTime.Now.ToString("yyyyMMdd_HHmmss_ff");
+                    if (_saved == 0 || _showOverlay) {
+                        _showOverlay = false;
+                        using (var path = new System.Drawing.Drawing2D.GraphicsPath())
+                        using (var fontFamily = new FontFamily("Consolas"))
+                        {
+                            _thumbG.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                            int fontSize = Math.Max(16, _thumbH / 25);
+                            float lineH = fontSize * 1.3f;
+                            string qname = _quality == 25 ? "Low" : _quality == 50 ? "Medium" : _quality == 100 ? "Best" : "High";
+                            path.AddString("Quality: " + qname, fontFamily, (int)FontStyle.Regular, fontSize, new PointF(0, 0), StringFormat.GenericDefault);
+                            path.AddString("Scale: " + (int)(_scale * 100) + "%", fontFamily, (int)FontStyle.Regular, fontSize, new PointF(0, lineH), StringFormat.GenericDefault);
+                            var bounds = path.GetBounds();
+                            int pad = fontSize * 2 / 3;
+                            // Find corner farthest from clock window
+                            float clockCX = (exL + exR) / 2f, clockCY = (exT + exB) / 2f;
+                            float[][] corners = { new[]{0f,0f}, new[]{1f,0f}, new[]{0f,1f}, new[]{1f,1f} };
+                            int best = 0; float maxDist = 0;
+                            for (int i = 0; i < 4; i++) {
+                                float cx = corners[i][0] * _thumbW, cy = corners[i][1] * _thumbH;
+                                float dx = cx - clockCX, dy = cy - clockCY;
+                                if (dx*dx + dy*dy > maxDist) { maxDist = dx*dx + dy*dy; best = i; }
+                            }
+                            float x = (corners[best][0] == 0) ? pad : _thumbW - bounds.Width - pad * 3;
+                            float y = (corners[best][1] == 0) ? pad : _thumbH - bounds.Height - pad * 3;
+                            var matrix = new System.Drawing.Drawing2D.Matrix();
+                            matrix.Translate(x - bounds.X + pad, y - bounds.Y + pad);
+                            path.Transform(matrix);
+                            var finalBounds = path.GetBounds();
+                            using (var bgBrush = new SolidBrush(Color.FromArgb(180, 0, 0, 0)))
+                            using (var bgPath = new System.Drawing.Drawing2D.GraphicsPath()) {
+                                float bx = finalBounds.X - pad, by = finalBounds.Y - pad, bw = finalBounds.Width + pad * 2, bh = finalBounds.Height + pad * 2, r = fontSize / 2f;
+                                bgPath.AddArc(bx, by, r * 2, r * 2, 180, 90); bgPath.AddArc(bx + bw - r * 2, by, r * 2, r * 2, 270, 90);
+                                bgPath.AddArc(bx + bw - r * 2, by + bh - r * 2, r * 2, r * 2, 0, 90); bgPath.AddArc(bx, by + bh - r * 2, r * 2, r * 2, 90, 90);
+                                bgPath.CloseFigure(); _thumbG.FillPath(bgBrush, bgPath);
+                            }
+                            
+                            _thumbG.FillPath(Brushes.White, path);
+                        }
+                    }
                     _thumbBmp.Save(System.IO.Path.Combine(_outDir, filename + ".jpg"), _jpegCodec, _encoderParams);
                     if (_saveMasked) {
                         using (var maskedBmp = new Bitmap(_thumbBmp))
@@ -311,6 +354,17 @@ public class BackgroundRecorder {
                 <MenuItem.Header>
                     <TextBlock><Underline>A</Underline>uto-hide</TextBlock>
                 </MenuItem.Header>
+            </MenuItem>
+            <MenuItem Name="MenuQuality" Header="Quality">
+                <MenuItem Name="MenuQ25" Header="Low (25)" IsCheckable="True"/>
+                <MenuItem Name="MenuQ50" Header="Medium (50)" IsCheckable="True"/>
+                <MenuItem Name="MenuQ75" Header="High (75)" IsCheckable="True" IsChecked="True"/>
+                <MenuItem Name="MenuQ100" Header="Best (100)" IsCheckable="True"/>
+            </MenuItem>
+            <MenuItem Name="MenuScale" Header="Scale">
+                <MenuItem Name="MenuS50" Header="50%" IsCheckable="True"/>
+                <MenuItem Name="MenuS75" Header="75%" IsCheckable="True" IsChecked="True"/>
+                <MenuItem Name="MenuS100" Header="100%" IsCheckable="True"/>
             </MenuItem>
             <MenuItem Name="MenuExit">
                 <MenuItem.Header>
@@ -343,6 +397,41 @@ public class BackgroundRecorder {
     $script:monitorLabel = $window.FindName("MonitorLabel")
     $menuExit = $window.FindName("MenuExit")
     $menuInvisible = $window.FindName("MenuInvisible")
+    $script:quality = $Quality
+    $script:qualityMenus = @{
+        25 = $window.FindName("MenuQ25")
+        50 = $window.FindName("MenuQ50")
+        75 = $window.FindName("MenuQ75")
+        100 = $window.FindName("MenuQ100")
+    }
+    foreach ($q in $script:qualityMenus.Keys) {
+        $menu = $script:qualityMenus[$q]
+        $menu.Tag = $q
+        $menu.IsChecked = ($q -eq $Quality)
+        $menu.Add_Click({
+            param($s,$e)
+            $script:quality = $s.Tag
+            foreach ($m in $script:qualityMenus.Values) { $m.IsChecked = ($m -eq $s) }
+            if ($script:recording) { $script:recorder.MarkSettingsChanged($script:quality) }
+        })
+    }
+    $script:scaleValue = $Scale
+    $script:scaleMenus = @{
+        0.5 = $window.FindName("MenuS50")
+        0.75 = $window.FindName("MenuS75")
+        1.0 = $window.FindName("MenuS100")
+    }
+    foreach ($s in $script:scaleMenus.Keys) {
+        $menu = $script:scaleMenus[$s]
+        $menu.Tag = $s
+        $menu.IsChecked = ($s -eq $Scale)
+        $menu.Add_Click({
+            param($sender,$e)
+            $script:scaleValue = $sender.Tag
+            foreach ($m in $script:scaleMenus.Values) { $m.IsChecked = ($m -eq $sender) }
+            Update-CaptureRegion
+        })
+    }
     $script:invisible = $false
     $menuExit.Add_Click({ $window.Close() })
     $menuInvisible.Add_Checked({ $script:invisible = $true; $mainBorder.Opacity = 0 })
@@ -408,8 +497,8 @@ public class BackgroundRecorder {
             if ($b.Bottom -gt $maxY) { $maxY = $b.Bottom }
         }
         $script:bounds = [System.Drawing.Rectangle]::new($minX, $minY, $maxX - $minX, $maxY - $minY)
-        $script:w = [int]($script:bounds.Width * $Scale)
-        $script:h = [int]($script:bounds.Height * $Scale)
+        $script:w = [int]($script:bounds.Width * $script:scaleValue)
+        $script:h = [int]($script:bounds.Height * $script:scaleValue)
     }
 
     function Show-MonitorOverlay {
@@ -519,7 +608,7 @@ public class BackgroundRecorder {
             foreach ($idx in $script:selectedMonitors) {
                 $monitorBoundsArray += Get-PhysicalBounds $script:screens[$idx]
             }
-            $started = $script:recorder.Start($script:bounds, [System.Drawing.Rectangle[]]$monitorBoundsArray, $script:w, $script:h, $FPS, $Quality, (Resolve-Path $script:outDir).Path, $SaveMasked, $Scale, $windowHelper.Handle)
+            $started = $script:recorder.Start($script:bounds, [System.Drawing.Rectangle[]]$monitorBoundsArray, $script:w, $script:h, $FPS, $script:quality, (Resolve-Path $script:outDir).Path, $SaveMasked, $script:scaleValue, $windowHelper.Handle)
             if (-not $started) {
                 [System.Windows.MessageBox]::Show("Recording failed: $($script:recorder.LastError)", "Error", "OK", "Error")
                 Remove-Item -Path $script:outDir -Force -ErrorAction SilentlyContinue
@@ -529,12 +618,14 @@ public class BackgroundRecorder {
             $btnToggle.Content = "■ STOP"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::Red
             $script:monitorLabel.IsHitTestVisible = $false; $script:monitorLabel.Opacity = 0.5
+            $window.FindName("MenuScale").IsEnabled = $false
             $recCounter.Text = "0"; $recCounter.Visibility = "Visible"
         } else {
             # Stop recording
             $script:recorder.Stop()
             $script:recording = $false
             $script:monitorLabel.IsHitTestVisible = $true; $script:monitorLabel.Opacity = 1.0
+            $window.FindName("MenuScale").IsEnabled = $true
             $recCounter.Visibility = "Hidden"
             $btnToggle.Content = "● REC"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::White

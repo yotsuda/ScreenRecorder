@@ -448,7 +448,7 @@ public class BackgroundRecorder {
     $window.Add_MouseLeftButtonDown({ $window.DragMove() })
     $window.Add_Deactivated({ $window.Topmost = $true })
     $window.Add_MouseEnter({ if ($script:invisible) { $mainBorder.BeginAnimation([System.Windows.UIElement]::OpacityProperty, [System.Windows.Media.Animation.DoubleAnimation]::new(1, [TimeSpan]::FromMilliseconds(100))) } })
-    $window.Add_MouseLeave({ if ($script:invisible -and -not $window.ContextMenu.IsOpen) { $mainBorder.BeginAnimation([System.Windows.UIElement]::OpacityProperty, [System.Windows.Media.Animation.DoubleAnimation]::new(0, [TimeSpan]::FromMilliseconds(100))) } })
+    $window.Add_MouseLeave({ if ($script:invisible -and -not $window.ContextMenu.IsOpen -and -not ($script:monitorMenu -and $script:monitorMenu.IsOpen) -and -not $script:overlayVisible) { $mainBorder.BeginAnimation([System.Windows.UIElement]::OpacityProperty, [System.Windows.Media.Animation.DoubleAnimation]::new(0, [TimeSpan]::FromMilliseconds(100))) } })
     $window.Add_MouseWheel({ param($s,$e)
         $size = $clock.FontSize + ($e.Delta / 30)
         if ($size -ge 12 -and $size -le 200) {
@@ -509,6 +509,7 @@ public class BackgroundRecorder {
     function Show-MonitorOverlay {
         param([switch]$ReopenMenu)
         $script:pendingMenuReopen = $ReopenMenu.IsPresent
+        $script:overlayVisible = $true
         $overlays = @()
         for ($i = 0; $i -lt $script:screens.Count; $i++) {
             $scr = $script:screens[$i]
@@ -535,9 +536,10 @@ public class BackgroundRecorder {
                 $s.Close()
             })
             $overlay.Add_Closed({
-                if ($script:pendingMenuReopen -and $script:overlayCloseCount -ne $null) {
-                    $script:overlayCloseCount++
-                    if ($script:overlayCloseCount -ge $script:overlayTotal) {
+                $script:overlayCloseCount++
+                if ($script:overlayCloseCount -ge $script:overlayTotal) {
+                    $script:overlayVisible = $false
+                    if ($script:pendingMenuReopen) {
                         $script:pendingMenuReopen = $false
                         $script:monitorMenu.PlacementTarget = $script:monitorLabel
                         $script:monitorMenu.Placement = [System.Windows.Controls.Primitives.PlacementMode]::Bottom

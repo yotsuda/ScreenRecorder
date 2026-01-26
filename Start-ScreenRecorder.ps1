@@ -507,6 +507,8 @@ public class BackgroundRecorder {
     }
 
     function Show-MonitorOverlay {
+        param([switch]$ReopenMenu)
+        $script:pendingMenuReopen = $ReopenMenu.IsPresent
         $overlays = @()
         for ($i = 0; $i -lt $script:screens.Count; $i++) {
             $scr = $script:screens[$i]
@@ -528,10 +530,26 @@ public class BackgroundRecorder {
 </Window>
 "@
             $overlay = [Windows.Markup.XamlReader]::Load([System.Xml.XmlNodeReader]::new($overlayXaml))
-            $overlay.Add_MouseLeftButtonDown({ param($s,$e) $s.Close() })
+            $overlay.Add_MouseLeftButtonDown({
+                param($s,$e)
+                $s.Close()
+            })
+            $overlay.Add_Closed({
+                if ($script:pendingMenuReopen -and $script:overlayCloseCount -ne $null) {
+                    $script:overlayCloseCount++
+                    if ($script:overlayCloseCount -ge $script:overlayTotal) {
+                        $script:pendingMenuReopen = $false
+                        $script:monitorMenu.PlacementTarget = $script:monitorLabel
+                        $script:monitorMenu.Placement = [System.Windows.Controls.Primitives.PlacementMode]::Bottom
+                        $script:monitorMenu.IsOpen = $true
+                    }
+                }
+            })
             $overlay.Show()
             $overlays += $overlay
         }
+        $script:overlayCloseCount = 0
+        $script:overlayTotal = $overlays.Count
         # Auto close after 1.5 seconds
         $timer = [System.Windows.Threading.DispatcherTimer]::new()
         $timer.Interval = [TimeSpan]::FromMilliseconds(1500)
@@ -573,7 +591,6 @@ public class BackgroundRecorder {
                 }
                 Update-MonitorLabel
                 Update-CaptureRegion
-                Show-MonitorOverlay
             })
             $script:monitorMenu.Items.Add($menuItem) | Out-Null
         }
@@ -581,8 +598,7 @@ public class BackgroundRecorder {
         $script:monitorLabel.ContextMenu = $script:monitorMenu
         $script:monitorLabel.Add_MouseLeftButtonDown({
             param($sender, $e)
-            $script:monitorMenu.PlacementTarget = $script:monitorLabel
-            $script:monitorMenu.IsOpen = $true
+            Show-MonitorOverlay -ReopenMenu
             $e.Handled = $true
         })
     }

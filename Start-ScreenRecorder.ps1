@@ -14,7 +14,8 @@ param(
     [int]$FPS = 2,
     [double]$Scale = 0.75,
     [int]$Quality = 75,
-    [switch]$SaveMasked
+    [switch]$SaveMasked,
+    [string]$ReadyFile
 )
 
 function Start-ScreenRecorder {
@@ -48,16 +49,32 @@ function Start-ScreenRecorder {
         [int]$FPS = 2,
         [double]$Scale = 0.75,
         [int]$Quality = 75,
-        [switch]$SaveMasked
+        [switch]$SaveMasked,
+        [Parameter(DontShow)]
+        [string]$ReadyFile
     )
 
     if (-not $Background) {
+        Write-Host 'Starting ScreenRecorder... ' -NoNewline
+        $readyFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "sr_ready_$PID.tmp")
         $exe = (Get-Process -Id $PID).Path
         $scriptPath = $MyInvocation.MyCommand.ScriptBlock.File
         if (-not $scriptPath) { $scriptPath = $PSCommandPath }
-        $procArgs = "-NoProfile -WindowStyle Hidden -File `"$scriptPath`" -Background -FPS $FPS -Scale $Scale -Quality $Quality"
+        $procArgs = "-NoProfile -WindowStyle Hidden -File `"$scriptPath`" -Background -FPS $FPS -Scale $Scale -Quality $Quality -ReadyFile `"$readyFile`""
         if ($SaveMasked) { $procArgs += " -SaveMasked" }
         Start-Process $exe -ArgumentList $procArgs -WindowStyle Hidden
+        # Wait for background to be ready with spinner
+        $spinner = '|', '/', '-', '\'
+        $i = 0
+        $timeout = [DateTime]::Now.AddSeconds(30)
+        [Console]::CursorVisible = $false
+        while (-not (Test-Path $readyFile) -and [DateTime]::Now -lt $timeout) {
+            Write-Host "`b$($spinner[$i++ % 4])" -NoNewline
+            Start-Sleep -Milliseconds 100
+        }
+        [Console]::CursorVisible = $true
+        Remove-Item $readyFile -ErrorAction SilentlyContinue
+        Write-Host "`b Ready!"
         return
     }
     Add-Type -AssemblyName PresentationFramework,System.Windows.Forms,System.Drawing
@@ -663,6 +680,7 @@ public class BackgroundRecorder {
     $clockTimer.Add_Tick({ $clock.Text = (Get-Date).ToString("HH:mm:ss.f"); if ($script:recording) { $recCounter.Text = $script:recorder.Saved } })
     $clockTimer.Start()
     $window.Add_Closed({ $clockTimer.Stop(); if ($script:recording) { $script:recorder.Stop(); Start-Process explorer $script:outDir } })
+    if ($ReadyFile) { New-Item -Path $ReadyFile -ItemType File -Force | Out-Null }
     $window.ShowDialog()
 }
 

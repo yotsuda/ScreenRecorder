@@ -354,7 +354,7 @@ public class BackgroundRecorder {
     $window.Add_MouseLeftButtonDown({ $window.DragMove() })
     $window.Add_Deactivated({ $window.Topmost = $true })
     $window.Add_MouseEnter({ if ($script:invisible) { $mainBorder.BeginAnimation([System.Windows.UIElement]::OpacityProperty, [System.Windows.Media.Animation.DoubleAnimation]::new(1, [TimeSpan]::FromMilliseconds(100))) } })
-    $window.Add_MouseLeave({ if ($script:invisible) { $mainBorder.BeginAnimation([System.Windows.UIElement]::OpacityProperty, [System.Windows.Media.Animation.DoubleAnimation]::new(0, [TimeSpan]::FromMilliseconds(100))) } })
+    $window.Add_MouseLeave({ if ($script:invisible -and -not $window.ContextMenu.IsOpen) { $mainBorder.BeginAnimation([System.Windows.UIElement]::OpacityProperty, [System.Windows.Media.Animation.DoubleAnimation]::new(0, [TimeSpan]::FromMilliseconds(100))) } })
     $window.Add_MouseWheel({ param($s,$e)
         $size = $clock.FontSize + ($e.Delta / 30)
         if ($size -ge 12 -and $size -le 200) {

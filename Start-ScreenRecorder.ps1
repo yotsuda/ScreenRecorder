@@ -297,7 +297,7 @@ public class BackgroundRecorder {
                             _thumbG.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                             int fontSize = Math.Max(16, _thumbH / 25);
                             float lineH = fontSize * 1.3f;
-                            string qname = _quality == 25 ? "Low" : _quality == 50 ? "Medium" : _quality == 100 ? "Best" : "High";
+                            string qname = _quality == 25 ? "Low" : _quality == 50 ? "Medium" : _quality == 75 ? "High" : _quality == 100 ? "Best" : _quality.ToString();
                             path.AddString("Quality: " + qname, fontFamily, (int)FontStyle.Regular, fontSize, new PointF(0, 0), StringFormat.GenericDefault);
                             path.AddString("Scale: " + (int)(_scale * 100) + "%", fontFamily, (int)FontStyle.Regular, fontSize, new PointF(0, lineH), StringFormat.GenericDefault);
                             var bounds = path.GetBounds();

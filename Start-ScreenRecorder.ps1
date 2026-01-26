@@ -158,7 +158,11 @@ public class BackgroundRecorder {
 
     public int Saved { get { return _saved; } }
     public string LastError { get { return _lastError; } }
-    public void MarkSettingsChanged(int quality) { _quality = quality; _encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, (long)quality); _showOverlay = true; }
+    public void MarkSettingsChanged(int quality) {
+        _quality = quality;
+        _encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, (long)quality);
+        _showOverlay = true;
+    }
 
     public bool Start(Rectangle bounds, Rectangle[] monitorBounds, int thumbW, int thumbH, int fps, int quality, string outDir, bool saveMasked, double scale, IntPtr windowHandle) {
         // Validate parameters
@@ -241,7 +245,7 @@ public class BackgroundRecorder {
     private void RecordLoop() {
         DisplayHelper.RECT _prevRect = new DisplayHelper.RECT();
         bool firstFrame = true;
-        
+
         while (_running) {
             var start = DateTime.Now;
             try {
@@ -251,13 +255,13 @@ public class BackgroundRecorder {
                 int exT = (int)((rect.Top - _bounds.Top) * _scale);
                 int exR = (int)((rect.Right - _bounds.Left) * _scale);
                 int exB = (int)((rect.Bottom - _bounds.Top) * _scale);
-                
+
                 // Skip if window is moving (rect changed since last frame)
-                bool isMoving = !firstFrame && (rect.Left != _prevRect.Left || rect.Top != _prevRect.Top || 
+                bool isMoving = !firstFrame && (rect.Left != _prevRect.Left || rect.Top != _prevRect.Top ||
                                                  rect.Right != _prevRect.Right || rect.Bottom != _prevRect.Bottom);
                 _prevRect = rect;
                 firstFrame = false;
-                
+
                 if (isMoving) {
                     // Skip this frame - window is moving
                     var skipElapsed = (int)(DateTime.Now - start).TotalMilliseconds;
@@ -265,7 +269,7 @@ public class BackgroundRecorder {
                     if (skipSleep > 0) Task.Delay(skipSleep).Wait();
                     continue;
                 }
-                
+
                 // Capture screen
                 if (_monitorBounds == null || _monitorBounds.Length == 1) {
                     _captureG.CopyFromScreen(_bounds.Location, Point.Empty, _bounds.Size);
@@ -279,7 +283,7 @@ public class BackgroundRecorder {
                         _captureG.DrawImage(_monitorBmps[i], relX, relY);
                     }
                 }
-                
+
                 _thumbG.DrawImage(_captureBmp, 0, 0, _thumbW, _thumbH);
 
                 long hash = DisplayHelper.ComputeImageHash(_thumbBmp, exL, exT, exR, exB);
@@ -320,7 +324,7 @@ public class BackgroundRecorder {
                                 bgPath.AddArc(bx + bw - r * 2, by + bh - r * 2, r * 2, r * 2, 0, 90); bgPath.AddArc(bx, by + bh - r * 2, r * 2, r * 2, 90, 90);
                                 bgPath.CloseFigure(); _thumbG.FillPath(bgBrush, bgPath);
                             }
-                            
+
                             _thumbG.FillPath(Brushes.White, path);
                         }
                     }
@@ -427,6 +431,7 @@ public class BackgroundRecorder {
         $menu.IsChecked = ($s -eq $Scale)
         $menu.Add_Click({
             param($sender,$e)
+            if ($script:recording) { return }
             $script:scaleValue = $sender.Tag
             foreach ($m in $script:scaleMenus.Values) { $m.IsChecked = ($m -eq $sender) }
             Update-CaptureRegion
@@ -618,14 +623,16 @@ public class BackgroundRecorder {
             $btnToggle.Content = "■ STOP"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::Red
             $script:monitorLabel.IsHitTestVisible = $false; $script:monitorLabel.Opacity = 0.5
-            $window.FindName("MenuScale").IsEnabled = $false
+            foreach ($m in $script:scaleMenus.Values) { $m.IsEnabled = $false }
+
             $recCounter.Text = "0"; $recCounter.Visibility = "Visible"
         } else {
             # Stop recording
             $script:recorder.Stop()
             $script:recording = $false
             $script:monitorLabel.IsHitTestVisible = $true; $script:monitorLabel.Opacity = 1.0
-            $window.FindName("MenuScale").IsEnabled = $true
+            foreach ($m in $script:scaleMenus.Values) { $m.IsEnabled = $true }
+
             $recCounter.Visibility = "Hidden"
             $btnToggle.Content = "● REC"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::White

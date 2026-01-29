@@ -458,6 +458,7 @@ public class BackgroundRecorder {
     $menuExit.Add_Click({ $window.Close() })
     $menuInvisible.Add_Checked({ $script:invisible = $true })
     $menuInvisible.Add_Unchecked({ $script:invisible = $false; $mainBorder.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $null); $mainBorder.Opacity = 1 })
+    $window.ContextMenu.Add_Closed({ if ($script:invisible -and -not $window.IsMouseOver) { $mainBorder.BeginAnimation([System.Windows.UIElement]::OpacityProperty, [System.Windows.Media.Animation.DoubleAnimation]::new(0, [TimeSpan]::FromMilliseconds(100))) } })
     $menuExit.Parent.Add_KeyDown({ param($s,$e)
         if ($e.Key -eq 'X') { $window.Close() }
         if ($e.Key -eq 'A') { $menuInvisible.IsChecked = -not $menuInvisible.IsChecked }

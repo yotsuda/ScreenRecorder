@@ -10,7 +10,8 @@ Screen capture tool with clock overlay for debugging and log correlation. No ext
 - **Scalable UI** - Mouse wheel to resize the clock display
 - **Auto-hide** - Clock window becomes transparent when not hovered
 - **Settings Overlay** - Quality and Scale settings are shown on the first captured frame
-
+- **Timed Recording** - Auto-start and auto-stop recording with `-RecordFor` parameter
+- **Settings Persistence** - Window position, size, and preferences are saved automatically
 ## Installation
 
 ```powershell
@@ -30,6 +31,9 @@ Start-ScreenRecorder -FPS 10 -Scale 0.75 -Quality 50
 
 # Save masked images for debugging hash calculation
 Start-ScreenRecorder -SaveMasked
+
+# Record for 10 minutes and automatically stop
+Start-ScreenRecorder -RecordFor 0:10:00
 ```
 
 ### Controls
@@ -52,6 +56,7 @@ Start-ScreenRecorder -SaveMasked
 | -Scale | double | 0.75 | Image scale (0.1-1.0) |
 | -Quality | int | 75 | JPEG quality (1-100) |
 | -SaveMasked | switch | - | Save masked images for debugging |
+| -RecordFor | TimeSpan | - | Auto-start recording and stop after specified duration |
 
 ## Output
 

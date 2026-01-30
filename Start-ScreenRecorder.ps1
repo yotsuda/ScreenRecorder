@@ -34,6 +34,8 @@ function Start-ScreenRecorder {
         Frames per second for capture. Default is 2.
     .PARAMETER Scale
         Scale factor for captured images (0.1 to 1.0). Default is 0.75.
+    .PARAMETER Quality
+        JPEG quality for captured images (1-100). Default is 75.
     .PARAMETER SaveMasked
         Saves masked images (with clock area blacked out) for debugging.
     .PARAMETER RecordFor
@@ -475,19 +477,21 @@ public class BackgroundRecorder {
     $window.Add_Deactivated({ $window.Topmost = $true })
     $window.Add_MouseEnter({ if ($script:invisible) { $mainBorder.BeginAnimation([System.Windows.UIElement]::OpacityProperty, [System.Windows.Media.Animation.DoubleAnimation]::new(1, [TimeSpan]::FromMilliseconds(100))) } })
     $window.Add_MouseLeave({ if ($script:invisible -and -not $window.ContextMenu.IsOpen -and -not ($script:monitorMenu -and $script:monitorMenu.IsOpen) -and -not $script:overlayVisible) { $mainBorder.BeginAnimation([System.Windows.UIElement]::OpacityProperty, [System.Windows.Media.Animation.DoubleAnimation]::new(0, [TimeSpan]::FromMilliseconds(100))) } })
+    function Update-FontSize($size) {
+        if ($size -lt 12 -or $size -gt 200) { return }
+        $clock.FontSize = $size
+        $btnToggle.FontSize = $size * 0.35
+        $btnToggle.Width = $size * 1.4
+        $btnToggle.Height = $size * 0.7
+        $btnToggle.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
+        $recCounter.FontSize = $size * 0.35; $recCounter.Height = $size * 0.45
+        $recSpacer.FontSize = $size * 0.35; $recSpacer.Height = $size * 0.45
+        $script:monitorLabel.FontSize = $size * 0.3
+        $script:monitorLabel.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
+        $mainBorder.Padding = [System.Windows.Thickness]::new($size * 0.3, $size * 0.2, $size * 0.3, $size * 0.2)
+    }
     $window.Add_MouseWheel({ param($s,$e)
-        $size = $clock.FontSize + ($e.Delta / 30)
-        if ($size -ge 12 -and $size -le 200) {
-            $clock.FontSize = $size
-            $btnToggle.FontSize = $size * 0.35
-            $btnToggle.Width = $size * 1.4
-            $btnToggle.Height = $size * 0.7
-            $btnToggle.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
-            $recCounter.FontSize = $size * 0.35; $recCounter.Height = $size * 0.45; $recSpacer.FontSize = $size * 0.35; $recSpacer.Height = $size * 0.45
-            $script:monitorLabel.FontSize = $size * 0.3
-            $script:monitorLabel.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
-            $mainBorder.Padding = [System.Windows.Thickness]::new($size * 0.3, $size * 0.2, $size * 0.3, $size * 0.2)
-        }
+        Update-FontSize ($clock.FontSize + ($e.Delta / 30))
     })
 
     # Settings file
@@ -516,7 +520,6 @@ public class BackgroundRecorder {
 
     # Monitor setup
     $script:screens = [System.Windows.Forms.Screen]::AllScreens
-    $script:dpiScale = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width / [System.Windows.SystemParameters]::VirtualScreenWidth
 
     function Get-PhysicalBounds($screen) {
         $dm = New-Object DisplayHelper+DEVMODE
@@ -560,14 +563,15 @@ public class BackgroundRecorder {
         param([switch]$ReopenMenu)
         $script:pendingMenuReopen = $ReopenMenu.IsPresent
         $script:overlayVisible = $true
+        $dpiScale = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width / [System.Windows.SystemParameters]::VirtualScreenWidth
         $overlays = @()
         for ($i = 0; $i -lt $script:screens.Count; $i++) {
             $scr = $script:screens[$i]
             $isSelected = $script:selectedMonitors -contains $i
-            $wpfLeft = $scr.Bounds.Left / $script:dpiScale
-            $wpfTop = $scr.Bounds.Top / $script:dpiScale
-            $wpfWidth = $scr.Bounds.Width / $script:dpiScale
-            $wpfHeight = $scr.Bounds.Height / $script:dpiScale
+            $wpfLeft = $scr.Bounds.Left / $dpiScale
+            $wpfTop = $scr.Bounds.Top / $dpiScale
+            $wpfWidth = $scr.Bounds.Width / $dpiScale
+            $wpfHeight = $scr.Bounds.Height / $dpiScale
             [xml]$overlayXaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     WindowStyle="None" AllowsTransparency="True" Topmost="True"
@@ -679,17 +683,8 @@ public class BackgroundRecorder {
             if ($null -ne $savedSettings.Top) { $window.Top = $savedSettings.Top }
         }
         # Font size
-        if ($savedSettings.FontSize -ge 12 -and $savedSettings.FontSize -le 200) {
-            $size = $savedSettings.FontSize
-            $clock.FontSize = $size
-            $btnToggle.FontSize = $size * 0.35
-            $btnToggle.Width = $size * 1.4
-            $btnToggle.Height = $size * 0.7
-            $btnToggle.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
-            $recCounter.FontSize = $size * 0.35; $recCounter.Height = $size * 0.45; $recSpacer.FontSize = $size * 0.35; $recSpacer.Height = $size * 0.45
-            $script:monitorLabel.FontSize = $size * 0.3
-            $script:monitorLabel.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
-            $mainBorder.Padding = [System.Windows.Thickness]::new($size * 0.3, $size * 0.2, $size * 0.3, $size * 0.2)
+        if ($savedSettings.FontSize) {
+            Update-FontSize $savedSettings.FontSize
         }
         # Auto-hide
         if ($savedSettings.AutoHide) { $menuInvisible.IsChecked = $true }

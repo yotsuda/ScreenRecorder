@@ -1,5 +1,5 @@
 ﻿<#PSScriptInfo
-.VERSION 0.7.0
+.VERSION 0.8.0
 .GUID d47eab76-de84-454d-aead-8b61ed3335eb
 .AUTHOR Yoshifumi Tsuda
 .COPYRIGHT Copyright (c) 2025-2026 Yoshifumi Tsuda. MIT License.
@@ -618,7 +618,14 @@ public class BackgroundRecorder {
         $script:monitorLabel.ContextMenu = $script:monitorMenu
         $script:monitorLabel.Add_MouseLeftButtonDown({
             param($sender, $e)
-            Show-MonitorOverlay -ReopenMenu
+            if ($script:recording) {
+                # Show menu only (no overlay) during recording
+                $script:monitorMenu.PlacementTarget = $script:monitorLabel
+                $script:monitorMenu.Placement = [System.Windows.Controls.Primitives.PlacementMode]::Bottom
+                $script:monitorMenu.IsOpen = $true
+            } else {
+                Show-MonitorOverlay -ReopenMenu
+            }
             $e.Handled = $true
         })
     }
@@ -658,16 +665,18 @@ public class BackgroundRecorder {
             $script:recording = $true
             $btnToggle.Content = "■ STOP"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::Red
-            $script:monitorLabel.IsHitTestVisible = $false; $script:monitorLabel.Opacity = 0.5
+            $script:monitorLabel.Opacity = 0.5
             foreach ($m in $script:scaleMenus.Values) { $m.IsEnabled = $false }
+            if ($script:monitorMenu) { foreach ($m in $script:monitorMenu.Items) { $m.IsEnabled = $false } }
 
             $recCounter.Text = "0"; $recCounter.Visibility = "Visible"
         } else {
             # Stop recording
             $script:recorder.Stop()
             $script:recording = $false
-            $script:monitorLabel.IsHitTestVisible = $true; $script:monitorLabel.Opacity = 1.0
+            $script:monitorLabel.Opacity = 1.0
             foreach ($m in $script:scaleMenus.Values) { $m.IsEnabled = $true }
+            if ($script:monitorMenu) { foreach ($m in $script:monitorMenu.Items) { $m.IsEnabled = $true } }
 
             $recCounter.Visibility = "Hidden"
             $btnToggle.Content = "● REC"

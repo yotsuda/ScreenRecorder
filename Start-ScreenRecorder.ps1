@@ -15,7 +15,8 @@ param(
     [double]$Scale = 0.75,
     [int]$Quality = 75,
     [switch]$SaveMasked,
-    [string]$ReadyFile
+    [string]$ReadyFile,
+    [TimeSpan]$RecordFor
 )
 
 function Start-ScreenRecorder {
@@ -35,12 +36,17 @@ function Start-ScreenRecorder {
         Scale factor for captured images (0.1 to 1.0). Default is 0.75.
     .PARAMETER SaveMasked
         Saves masked images (with clock area blacked out) for debugging.
+    .PARAMETER RecordFor
+        Starts recording immediately and stops after the specified duration.
     .EXAMPLE
         Start-ScreenRecorder
         Starts the recorder in background mode.
     .EXAMPLE
         Start-ScreenRecorder -FPS 10 -Scale 0.75
         Starts with higher frame rate and larger output images.
+    .EXAMPLE
+        Start-ScreenRecorder -RecordFor 0:10:00
+        Starts recording immediately and stops after 10 minutes.
     #>
     [CmdletBinding()]
     param(
@@ -51,7 +57,8 @@ function Start-ScreenRecorder {
         [int]$Quality = 75,
         [switch]$SaveMasked,
         [Parameter(DontShow)]
-        [string]$ReadyFile
+        [string]$ReadyFile,
+        [TimeSpan]$RecordFor
     )
 
     if (-not $Background) {
@@ -62,6 +69,7 @@ function Start-ScreenRecorder {
         if (-not $scriptPath) { $scriptPath = $PSCommandPath }
         $procArgs = "-NoProfile -WindowStyle Hidden -File `"$scriptPath`" -Background -FPS $FPS -Scale $Scale -Quality $Quality -ReadyFile `"$readyFile`""
         if ($SaveMasked) { $procArgs += " -SaveMasked" }
+        if ($RecordFor -gt [TimeSpan]::Zero) { $procArgs += " -RecordFor $($RecordFor.ToString())" }
         Start-Process $exe -ArgumentList $procArgs -WindowStyle Hidden
         # Wait for background to be ready with spinner
         $spinner = '|', '/', '-', '\'
@@ -691,6 +699,29 @@ public class BackgroundRecorder {
     $clockTimer.Start()
     $window.Add_Closed({ $clockTimer.Stop(); if ($script:recording) { $script:recorder.Stop(); Start-Process explorer $script:outDir } })
     if ($ReadyFile) { New-Item -Path $ReadyFile -ItemType File -Force | Out-Null }
+
+    # Auto-start recording if -RecordFor is specified
+    if ($RecordFor -gt [TimeSpan]::Zero) {
+        $window.Add_ContentRendered({
+            # Initialize clock and wait for UI rendering to complete
+            $clock.Text = (Get-Date).ToString("HH:mm:ss.f")
+            $window.Dispatcher.BeginInvoke([System.Windows.Threading.DispatcherPriority]::Loaded, [Action]{
+                $btnToggle.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+                # Set up auto-stop timer
+                $script:stopTimer = [System.Windows.Threading.DispatcherTimer]::new()
+                $script:stopTimer.Interval = $RecordFor
+                $script:stopTimer.Add_Tick({
+                    $script:stopTimer.Stop()
+                    if ($script:recording) {
+                        $btnToggle.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+                    }
+                    $window.Close()
+                })
+                $script:stopTimer.Start()
+            })
+        })
+    }
+
     $window.ShowDialog()
 }
 

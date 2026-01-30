@@ -490,6 +490,30 @@ public class BackgroundRecorder {
         }
     })
 
+    # Settings file
+    $script:settingsPath = [System.IO.Path]::Combine($env:APPDATA, 'ScreenRecorder', 'settings.json')
+
+    function Save-Settings {
+        $settings = @{
+            Left = $window.Left
+            Top = $window.Top
+            FontSize = $clock.FontSize
+            AutoHide = $script:invisible
+            SelectedMonitors = $script:selectedMonitors
+            Quality = $script:quality
+            Scale = $script:scaleValue
+            MonitorCount = $script:screens.Count
+        }
+        $dir = [System.IO.Path]::GetDirectoryName($script:settingsPath)
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        $settings | ConvertTo-Json | Set-Content -Path $script:settingsPath -Encoding UTF8
+    }
+
+    function Load-Settings {
+        if (-not (Test-Path $script:settingsPath)) { return $null }
+        try { Get-Content -Path $script:settingsPath -Raw | ConvertFrom-Json } catch { $null }
+    }
+
     # Monitor setup
     $script:screens = [System.Windows.Forms.Screen]::AllScreens
     $script:dpiScale = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width / [System.Windows.SystemParameters]::VirtualScreenWidth
@@ -640,6 +664,59 @@ public class BackgroundRecorder {
 
     $script:recording = $false
     $script:outDir = $null
+
+    # Load saved settings
+    $savedSettings = Load-Settings
+    if ($savedSettings) {
+        # Check if monitor configuration changed
+        $monitorConfigChanged = $savedSettings.MonitorCount -ne $script:screens.Count
+
+        # Window position (skip if monitor config changed)
+        if (-not $monitorConfigChanged) {
+            if ($null -ne $savedSettings.Left) { $window.Left = $savedSettings.Left }
+            if ($null -ne $savedSettings.Top) { $window.Top = $savedSettings.Top }
+        }
+        # Font size
+        if ($savedSettings.FontSize -ge 12 -and $savedSettings.FontSize -le 200) {
+            $size = $savedSettings.FontSize
+            $clock.FontSize = $size
+            $btnToggle.FontSize = $size * 0.35
+            $btnToggle.Width = $size * 1.4
+            $btnToggle.Height = $size * 0.7
+            $btnToggle.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
+            $recCounter.FontSize = $size * 0.35; $recCounter.Height = $size * 0.45; $recSpacer.Height = $size * 0.45
+            $script:monitorLabel.FontSize = $size * 0.3
+            $script:monitorLabel.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
+            $mainBorder.Padding = [System.Windows.Thickness]::new($size * 0.3, $size * 0.2, $size * 0.3, $size * 0.2)
+        }
+        # Auto-hide
+        if ($savedSettings.AutoHide) { $menuInvisible.IsChecked = $true }
+        # Quality
+        if ($savedSettings.Quality -ge 1 -and $savedSettings.Quality -le 100) {
+            $script:quality = $savedSettings.Quality
+            foreach ($m in $script:qualityMenus.Values) { $m.IsChecked = ($m.Tag -eq $script:quality) }
+        }
+        # Scale
+        if ($savedSettings.Scale -ge 0.1 -and $savedSettings.Scale -le 1.0) {
+            $script:scaleValue = $savedSettings.Scale
+            foreach ($m in $script:scaleMenus.Values) { $m.IsChecked = ($m.Tag -eq $script:scaleValue) }
+        }
+        # Selected monitors (skip if monitor config changed)
+        if (-not $monitorConfigChanged -and $savedSettings.SelectedMonitors) {
+            $validMonitors = @($savedSettings.SelectedMonitors | Where-Object { $_ -ge 0 -and $_ -lt $script:screens.Count })
+            if ($validMonitors.Count -gt 0) {
+                $script:selectedMonitors = $validMonitors
+                # Update monitor menu checkboxes
+                if ($script:monitorMenu) {
+                    foreach ($item in $script:monitorMenu.Items) {
+                        $item.IsChecked = $script:selectedMonitors -contains $item.Tag
+                    }
+                }
+                Update-MonitorLabel
+            }
+        }
+    }
+
     Update-CaptureRegion
 
     # Background recorder instance
@@ -697,11 +774,19 @@ public class BackgroundRecorder {
     $clockTimer.Interval = [TimeSpan]::FromMilliseconds(100)
     $clockTimer.Add_Tick({ $clock.Text = (Get-Date).ToString("HH:mm:ss.f"); if ($script:recording) { $recCounter.Text = $script:recorder.Saved } })
     $clockTimer.Start()
-    $window.Add_Closed({ $clockTimer.Stop(); if ($script:recording) { $script:recorder.Stop(); Start-Process explorer $script:outDir } })
+    $window.Add_Closed({
+        $clockTimer.Stop()
+        Save-Settings
+        if ($script:recording) { $script:recorder.Stop(); Start-Process explorer $script:outDir }
+    })
     if ($ReadyFile) { New-Item -Path $ReadyFile -ItemType File -Force | Out-Null }
 
     # Auto-start recording if -RecordFor is specified
     if ($RecordFor -gt [TimeSpan]::Zero) {
+        # Hide window immediately if Auto-hide is enabled
+        if ($script:invisible) {
+            $mainBorder.Opacity = 0
+        }
         $window.Add_ContentRendered({
             # Initialize clock and wait for UI rendering to complete
             $clock.Text = (Get-Date).ToString("HH:mm:ss.f")

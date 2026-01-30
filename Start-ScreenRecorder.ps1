@@ -11,8 +11,11 @@
 
 param(
     [switch]$Background,
+    [ValidateRange(1, 60)]
     [int]$FPS = 2,
+    [ValidateRange(0.1, 1.0)]
     [double]$Scale = 0.75,
+    [ValidateRange(1, 100)]
     [int]$Quality = 75,
     [switch]$SaveMasked,
     [string]$ReadyFile,
@@ -54,8 +57,11 @@ function Start-ScreenRecorder {
     param(
         [Parameter(DontShow)]
         [switch]$Background,
+        [ValidateRange(1, 60)]
         [int]$FPS = 2,
+        [ValidateRange(0.1, 1.0)]
         [double]$Scale = 0.75,
+        [ValidateRange(1, 100)]
         [int]$Quality = 75,
         [switch]$SaveMasked,
         [Parameter(DontShow)]

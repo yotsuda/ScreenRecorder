@@ -1,5 +1,5 @@
 ﻿<#PSScriptInfo
-.VERSION 0.8.0
+.VERSION 0.9.0
 .GUID d47eab76-de84-454d-aead-8b61ed3335eb
 .AUTHOR Yoshifumi Tsuda
 .COPYRIGHT Copyright (c) 2025-2026 Yoshifumi Tsuda. MIT License.
@@ -407,7 +407,7 @@ public class BackgroundRecorder {
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <TextBlock Name="Clock" Foreground="White" FontSize="32" FontFamily="Consolas" VerticalAlignment="Center"/>
                 <StackPanel Margin="8,0,0,0" VerticalAlignment="Center">
-                    <TextBlock Name="RecSpacer" Height="14"/>
+                    <TextBlock Name="RecSpacer" Foreground="#AAAAAA" FontSize="11" Height="14" TextAlignment="Right"/>
                     <Button Name="BtnToggle" Content="● REC" Width="45" Height="22" FontSize="11" Background="#AA444444" Foreground="White" BorderThickness="0" Padding="0"/>
                     <TextBlock Name="RecCounter" Text="0" Foreground="#FF6666" FontSize="11" Height="14" TextAlignment="Right" Visibility="Hidden"/>
                 </StackPanel>
@@ -483,7 +483,7 @@ public class BackgroundRecorder {
             $btnToggle.Width = $size * 1.4
             $btnToggle.Height = $size * 0.7
             $btnToggle.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
-            $recCounter.FontSize = $size * 0.35; $recCounter.Height = $size * 0.45; $recSpacer.Height = $size * 0.45
+            $recCounter.FontSize = $size * 0.35; $recCounter.Height = $size * 0.45; $recSpacer.FontSize = $size * 0.35; $recSpacer.Height = $size * 0.45
             $script:monitorLabel.FontSize = $size * 0.3
             $script:monitorLabel.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
             $mainBorder.Padding = [System.Windows.Thickness]::new($size * 0.3, $size * 0.2, $size * 0.3, $size * 0.2)
@@ -664,6 +664,8 @@ public class BackgroundRecorder {
 
     $script:recording = $false
     $script:outDir = $null
+    $script:recordFor = $RecordFor
+    $script:recordStartTime = $null
 
     # Load saved settings
     $savedSettings = Load-Settings
@@ -684,7 +686,7 @@ public class BackgroundRecorder {
             $btnToggle.Width = $size * 1.4
             $btnToggle.Height = $size * 0.7
             $btnToggle.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
-            $recCounter.FontSize = $size * 0.35; $recCounter.Height = $size * 0.45; $recSpacer.Height = $size * 0.45
+            $recCounter.FontSize = $size * 0.35; $recCounter.Height = $size * 0.45; $recSpacer.FontSize = $size * 0.35; $recSpacer.Height = $size * 0.45
             $script:monitorLabel.FontSize = $size * 0.3
             $script:monitorLabel.Margin = [System.Windows.Thickness]::new($size * 0.25, 0, 0, 0)
             $mainBorder.Padding = [System.Windows.Thickness]::new($size * 0.3, $size * 0.2, $size * 0.3, $size * 0.2)
@@ -755,6 +757,10 @@ public class BackgroundRecorder {
             if ($script:monitorMenu) { foreach ($m in $script:monitorMenu.Items) { $m.IsEnabled = $false } }
 
             $recCounter.Text = "0"; $recCounter.Visibility = "Visible"
+            if ($script:recordFor -gt [TimeSpan]::Zero) {
+                $script:recordStartTime = [DateTime]::Now
+                $recSpacer.Text = $script:recordFor.ToString('hh\:mm\:ss')
+            }
         } else {
             # Stop recording
             $script:recorder.Stop()
@@ -764,6 +770,10 @@ public class BackgroundRecorder {
             if ($script:monitorMenu) { foreach ($m in $script:monitorMenu.Items) { $m.IsEnabled = $true } }
 
             $recCounter.Visibility = "Hidden"
+            $recSpacer.Text = ""
+            $script:recordStartTime = $null
+            $script:recordFor = [TimeSpan]::Zero
+            if ($script:stopTimer) { $script:stopTimer.Stop(); $script:stopTimer = $null }
             $btnToggle.Content = "● REC"
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::White
             Start-Process explorer $script:outDir
@@ -772,7 +782,18 @@ public class BackgroundRecorder {
 
     $clockTimer = New-Object System.Windows.Threading.DispatcherTimer
     $clockTimer.Interval = [TimeSpan]::FromMilliseconds(100)
-    $clockTimer.Add_Tick({ $clock.Text = (Get-Date).ToString("HH:mm:ss.f"); if ($script:recording) { $recCounter.Text = $script:recorder.Saved } })
+    $clockTimer.Add_Tick({
+        $clock.Text = (Get-Date).ToString("HH:mm:ss.f")
+        if ($script:recording) {
+            $recCounter.Text = $script:recorder.Saved
+            if ($script:recordStartTime) {
+                $elapsed = [DateTime]::Now - $script:recordStartTime
+                $remaining = $script:recordFor - $elapsed
+                if ($remaining -lt [TimeSpan]::Zero) { $remaining = [TimeSpan]::Zero }
+                $recSpacer.Text = $remaining.ToString('hh\:mm\:ss')
+            }
+        }
+    })
     $clockTimer.Start()
     $window.Add_Closed({
         $clockTimer.Stop()

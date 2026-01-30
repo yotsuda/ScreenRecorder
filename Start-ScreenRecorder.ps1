@@ -397,6 +397,12 @@ public class BackgroundRecorder {
                 <MenuItem Name="MenuS75" Header="75%" IsCheckable="True" IsChecked="True"/>
                 <MenuItem Name="MenuS100" Header="100%" IsCheckable="True"/>
             </MenuItem>
+            <MenuItem Name="MenuFPS" Header="FPS">
+                <MenuItem Name="MenuF1" Header="1" IsCheckable="True"/>
+                <MenuItem Name="MenuF2" Header="2" IsCheckable="True" IsChecked="True"/>
+                <MenuItem Name="MenuF5" Header="5" IsCheckable="True"/>
+                <MenuItem Name="MenuF10" Header="10" IsCheckable="True"/>
+            </MenuItem>
             <MenuItem Name="MenuExit">
                 <MenuItem.Header>
                     <TextBlock>E<Underline>x</Underline>it</TextBlock>
@@ -464,6 +470,24 @@ public class BackgroundRecorder {
             Update-CaptureRegion
         })
     }
+    $script:fpsValue = $FPS
+    $script:fpsMenus = @{
+        1 = $window.FindName("MenuF1")
+        2 = $window.FindName("MenuF2")
+        5 = $window.FindName("MenuF5")
+        10 = $window.FindName("MenuF10")
+    }
+    foreach ($f in $script:fpsMenus.Keys) {
+        $menu = $script:fpsMenus[$f]
+        $menu.Tag = $f
+        $menu.IsChecked = ($f -eq $FPS)
+        $menu.Add_Click({
+            param($sender,$e)
+            if ($script:recording) { return }
+            $script:fpsValue = $sender.Tag
+            foreach ($m in $script:fpsMenus.Values) { $m.IsChecked = ($m -eq $sender) }
+        })
+    }
     $script:invisible = $false
     $menuExit.Add_Click({ $window.Close() })
     $menuInvisible.Add_Checked({ $script:invisible = $true })
@@ -506,6 +530,7 @@ public class BackgroundRecorder {
             SelectedMonitors = $script:selectedMonitors
             Quality = $script:quality
             Scale = $script:scaleValue
+            FPS = $script:fpsValue
             MonitorCount = $script:screens.Count
         }
         $dir = [System.IO.Path]::GetDirectoryName($script:settingsPath)
@@ -698,6 +723,11 @@ public class BackgroundRecorder {
             $script:scaleValue = $savedSettings.Scale
             foreach ($m in $script:scaleMenus.Values) { $m.IsChecked = ($m.Tag -eq $script:scaleValue) }
         }
+        # FPS
+        if ($savedSettings.FPS -in @(1, 2, 5, 10)) {
+            $script:fpsValue = $savedSettings.FPS
+            foreach ($m in $script:fpsMenus.Values) { $m.IsChecked = ($m.Tag -eq $script:fpsValue) }
+        }
         # Selected monitors (skip if monitor config changed)
         if (-not $monitorConfigChanged -and $savedSettings.SelectedMonitors) {
             $validMonitors = @($savedSettings.SelectedMonitors | Where-Object { $_ -ge 0 -and $_ -lt $script:screens.Count })
@@ -738,7 +768,7 @@ public class BackgroundRecorder {
             foreach ($idx in $script:selectedMonitors) {
                 $monitorBoundsArray += Get-PhysicalBounds $script:screens[$idx]
             }
-            $started = $script:recorder.Start($script:bounds, [System.Drawing.Rectangle[]]$monitorBoundsArray, $script:w, $script:h, $FPS, $script:quality, (Resolve-Path $script:outDir).Path, $SaveMasked, $script:scaleValue, $windowHelper.Handle)
+            $started = $script:recorder.Start($script:bounds, [System.Drawing.Rectangle[]]$monitorBoundsArray, $script:w, $script:h, $script:fpsValue, $script:quality, (Resolve-Path $script:outDir).Path, $SaveMasked, $script:scaleValue, $windowHelper.Handle)
             if (-not $started) {
                 [System.Windows.MessageBox]::Show("Recording failed: $($script:recorder.LastError)", "Error", "OK", "Error")
                 Remove-Item -Path $script:outDir -Force -ErrorAction SilentlyContinue
@@ -749,6 +779,7 @@ public class BackgroundRecorder {
             $btnToggle.Foreground = [System.Windows.Media.Brushes]::Red
             $script:monitorLabel.Opacity = 0.5
             foreach ($m in $script:scaleMenus.Values) { $m.IsEnabled = $false }
+            foreach ($m in $script:fpsMenus.Values) { $m.IsEnabled = $false }
             if ($script:monitorMenu) { foreach ($m in $script:monitorMenu.Items) { $m.IsEnabled = $false } }
 
             $recCounter.Text = "0"; $recCounter.Visibility = "Visible"
@@ -762,6 +793,7 @@ public class BackgroundRecorder {
             $script:recording = $false
             $script:monitorLabel.Opacity = 1.0
             foreach ($m in $script:scaleMenus.Values) { $m.IsEnabled = $true }
+            foreach ($m in $script:fpsMenus.Values) { $m.IsEnabled = $true }
             if ($script:monitorMenu) { foreach ($m in $script:monitorMenu.Items) { $m.IsEnabled = $true } }
 
             $recCounter.Visibility = "Hidden"

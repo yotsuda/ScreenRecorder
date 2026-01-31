@@ -2,6 +2,11 @@
 
 Screen capture tool with clock overlay for debugging and log correlation. No external dependencies required.
 
+## Use Cases
+
+- **Debugging** - Correlate screen captures with log timestamps during bug reproduction
+- **Documentation** - Automatically capture screenshots while performing tasks for creating step-by-step guides
+
 ## Features
 
 - **Clock Overlay** - Always-on-top transparent window showing current time (HH:mm:ss.f)

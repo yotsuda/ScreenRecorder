@@ -249,7 +249,7 @@ public class BackgroundRecorder {
         _encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, (long)quality);
 
         _running = true;
-        _task = Task.Run((Action)RecordLoop);
+        _task = Task.Run(RecordLoop);
         return true;
     }
 
@@ -546,7 +546,7 @@ public class BackgroundRecorder {
 
     function Load-Settings {
         if (-not (Test-Path $script:settingsPath)) { return $null }
-        try { Get-Content -Path $script:settingsPath -Raw | ConvertFrom-Json } catch { $null }
+        try { Get-Content -Path $script:settingsPath -Raw | ConvertFrom-Json } catch { Write-Warning "Failed to load settings: $_"; $null }
     }
 
     # Monitor setup
@@ -559,7 +559,8 @@ public class BackgroundRecorder {
         [System.Drawing.Rectangle]::new($dm.dmPositionX, $dm.dmPositionY, $dm.dmPelsWidth, $dm.dmPelsHeight)
     }
     # Selected monitors (array of indices)
-    $script:selectedMonitors = @([Array]::IndexOf($script:screens, [System.Windows.Forms.Screen]::PrimaryScreen))
+    $primaryIdx = [Array]::IndexOf($script:screens, [System.Windows.Forms.Screen]::PrimaryScreen)
+    $script:selectedMonitors = @($primaryIdx -ge 0 ? $primaryIdx : 0)
 
     function Update-MonitorLabel {
         if ($script:selectedMonitors.Count -eq 0) {
@@ -641,7 +642,7 @@ public class BackgroundRecorder {
         $timer = [System.Windows.Threading.DispatcherTimer]::new()
         $timer.Interval = [TimeSpan]::FromMilliseconds(1500)
         $timer.Add_Tick({
-            $timer.Stop()
+            $timer.Stop(); $timer.IsEnabled = $false
             foreach ($o in $overlays) { if ($o.IsVisible) { $o.Close() } }
         }.GetNewClosure())
         $timer.Start()
@@ -762,7 +763,7 @@ public class BackgroundRecorder {
         if (-not $script:recording) {
             # Check if current directory is a system folder
             $blocked = @($env:SystemRoot, "$env:SystemRoot\System32", $env:ProgramFiles, ${env:ProgramFiles(x86)})
-            if ((Get-Location).Path -in $blocked) {
+            if ((Get-Location).Path -iin $blocked) {
                 [System.Windows.MessageBox]::Show("Cannot record in system folder. Please change to a working directory.", "Warning", "OK", "Warning")
                 return
             }

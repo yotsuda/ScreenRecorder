@@ -19,6 +19,7 @@ param(
     [int]$Quality = 75,
     [switch]$SaveMasked,
     [string]$ReadyFile,
+    [ArgumentCompleter({ '00:05:00' })]
     [TimeSpan]$RecordFor
 )
 
@@ -66,6 +67,7 @@ function Start-ScreenRecorder {
         [switch]$SaveMasked,
         [Parameter(DontShow)]
         [string]$ReadyFile,
+        [ArgumentCompleter({ '00:05:00' })]
         [TimeSpan]$RecordFor
     )
 

@@ -30,7 +30,13 @@ CompanyName = ''
 Copyright = 'Copyright (c) 2025-2026 Yoshifumi Tsuda. MIT License.'
 
 # Description of the functionality provided by this module
-Description = 'Screen capture tool with clock overlay for debugging and log correlation. No external dependencies required. Can be run directly without module installation.'
+Description = 'Screen capture tool with clock overlay for debugging and log correlation. Displays an always-on-top clock and captures screenshots only when the screen changes.
+
+Usage: Start-ScreenRecorder
+       Start-ScreenRecorder -RecordFor 00:05:00
+
+No external dependencies required. Can be run directly without module installation.
+See https://github.com/yotsuda/ScreenRecorder for detailed usage and parameters.'
 
 # Minimum version of the PowerShell engine required by this module
 PowerShellVersion = '5.1'

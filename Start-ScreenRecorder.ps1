@@ -10,6 +10,7 @@
 #>
 
 param(
+    [Parameter(DontShow)]
     [switch]$Background,
     [ValidateRange(1, 60)]
     [int]$FPS = 2,
@@ -18,6 +19,7 @@ param(
     [ValidateRange(1, 100)]
     [int]$Quality = 75,
     [switch]$SaveMasked,
+    [Parameter(DontShow)]
     [string]$ReadyFile,
     [ArgumentCompleter({ '00:05:00' })]
     [TimeSpan]$RecordFor

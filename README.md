@@ -28,6 +28,10 @@ Install-Module ScreenRecorder
 
 Or simply download and run `Start-ScreenRecorder.ps1` directly - no module installation required.
 
+```powershell
+.\Start-ScreenRecorder.ps1
+```
+
 ## Usage
 
 ```powershell

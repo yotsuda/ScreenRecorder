@@ -2,6 +2,8 @@
 
 Screen capture tool with clock overlay for debugging and log correlation. No external dependencies required.
 
+![20260203_200218_13](https://github.com/user-attachments/assets/a9ffa14a-b54c-4e5f-b587-b55f4b8eccf1)
+
 ## Use Cases
 
 - **Debugging** - Correlate screen captures with log timestamps during bug reproduction

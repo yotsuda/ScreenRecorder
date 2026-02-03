@@ -70,6 +70,8 @@ Start-ScreenRecorder -OutputPath D:\Screenshots
 | -RecordFor | TimeSpan | - | Auto-start recording and stop after specified duration |
 | -OutputPath | string | - | Base directory for screenshots (subfolder created automatically) |
 
+Window position, size, and settings (Quality, Scale, FPS, Auto-hide, selected monitors) are automatically saved on exit and restored on next launch.
+
 ## Output
 
 Screenshots are saved to a timestamped subfolder as JPEG files:

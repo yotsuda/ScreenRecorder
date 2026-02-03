@@ -40,6 +40,9 @@ Start-ScreenRecorder -SaveMasked
 
 # Record for 10 minutes and automatically stop
 Start-ScreenRecorder -RecordFor 0:10:00
+
+# Save to specific folder
+Start-ScreenRecorder -OutputPath D:\Screenshots
 ```
 
 ### Controls
@@ -63,10 +66,13 @@ Start-ScreenRecorder -RecordFor 0:10:00
 | -Quality | int | 75 | JPEG quality (1-100) |
 | -SaveMasked | switch | - | Save masked images for debugging |
 | -RecordFor | TimeSpan | - | Auto-start recording and stop after specified duration |
+| -OutputPath | string | - | Base directory for screenshots (subfolder created automatically) |
 
 ## Output
 
-Screenshots are saved to `./ScreenCaptures/yyyyMMdd_HHmmss/` as JPEG files.
+Screenshots are saved to a timestamped subfolder as JPEG files:
+- With `-OutputPath D:\Screenshots`: `D:\Screenshots\yyyyMMdd_HHmmss\`
+- Default: `./ScreenCaptures/yyyyMMdd_HHmmss/`
 
 Filename format: `yyyyMMdd_HHmmss_ff.jpg`
 

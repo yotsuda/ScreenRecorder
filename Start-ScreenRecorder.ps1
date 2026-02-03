@@ -22,7 +22,8 @@ param(
     [Parameter(DontShow)]
     [string]$ReadyFile,
     [ArgumentCompleter({ '00:05:00' })]
-    [TimeSpan]$RecordFor
+    [TimeSpan]$RecordFor,
+    [string]$OutputPath
 )
 
 function Start-ScreenRecorder {
@@ -46,6 +47,9 @@ function Start-ScreenRecorder {
         Saves masked images (with clock area blacked out) for debugging.
     .PARAMETER RecordFor
         Starts recording immediately and stops after the specified duration.
+    .PARAMETER OutputPath
+        Base directory for saving screenshots. A timestamped subfolder will be created.
+        If not specified, uses current directory or TEMP folder as fallback.
     .EXAMPLE
         Start-ScreenRecorder
         Starts the recorder in background mode.
@@ -55,6 +59,9 @@ function Start-ScreenRecorder {
     .EXAMPLE
         Start-ScreenRecorder -RecordFor 0:10:00
         Starts recording immediately and stops after 10 minutes.
+    .EXAMPLE
+        Start-ScreenRecorder -OutputPath D:\Screenshots
+        Saves screenshots to D:\Screenshots\yyyyMMdd_HHmmss\ folder.
     #>
     [CmdletBinding()]
     param(
@@ -70,7 +77,8 @@ function Start-ScreenRecorder {
         [Parameter(DontShow)]
         [string]$ReadyFile,
         [ArgumentCompleter({ '00:05:00' })]
-        [TimeSpan]$RecordFor
+        [TimeSpan]$RecordFor,
+        [string]$OutputPath
     )
 
     if (-not $Background) {
@@ -82,6 +90,7 @@ function Start-ScreenRecorder {
         $procArgs = "-NoProfile -WindowStyle Hidden -File `"$scriptPath`" -Background -FPS $FPS -Scale $Scale -Quality $Quality -ReadyFile `"$readyFile`""
         if ($SaveMasked) { $procArgs += " -SaveMasked" }
         if ($RecordFor -gt [TimeSpan]::Zero) { $procArgs += " -RecordFor $($RecordFor.ToString())" }
+        if ($OutputPath) { $procArgs += " -OutputPath `"$OutputPath`"" }
         Start-Process $exe -ArgumentList $procArgs -WindowStyle Hidden
         # Wait for background to be ready with spinner
         $spinner = '|', '/', '-', '\'
@@ -424,7 +433,7 @@ public class BackgroundRecorder {
                 }
             } catch (Exception ex) {
                 _lastError = ex.ToString();
-                _errorCallback?.Invoke(_lastError);
+                if (_errorCallback != null) _errorCallback(_lastError);
             }
 
             var elapsed = (int)(DateTime.Now - start).TotalMilliseconds;
@@ -831,16 +840,31 @@ public class BackgroundRecorder {
     $btnToggle.Add_Click({
         if (-not $script:recording) {
             # Check write access and determine output directory
-            $currentDir = Get-Location
-            if (Test-WriteAccess $currentDir) {
-                $baseDir = $currentDir.Path
+            if ($OutputPath) {
+                if (Test-WriteAccess $OutputPath) {
+                    $baseDir = $OutputPath
+                } else {
+                    New-Item -ItemType Directory -Path $OutputPath -Force -ErrorAction SilentlyContinue | Out-Null
+                    if (Test-WriteAccess $OutputPath) {
+                        $baseDir = $OutputPath
+                    } else {
+                        [System.Windows.MessageBox]::Show("Output path is not writable: $OutputPath", "Error", "OK", "Error")
+                        return
+                    }
+                }
+                $script:outDir = Join-Path $baseDir (Get-Date -Format 'yyyyMMdd_HHmmss')
             } else {
-                $baseDir = Join-Path $env:TEMP 'ScreenRecorder'
-                New-Item -ItemType Directory -Path $baseDir -Force -ErrorAction SilentlyContinue | Out-Null
-                [System.Windows.MessageBox]::Show("Current directory is not writable.`n`nSaving to: $baseDir", "Warning", "OK", "Warning")
+                $currentDir = Get-Location
+                if (Test-WriteAccess $currentDir) {
+                    $baseDir = $currentDir.Path
+                } else {
+                    $baseDir = Join-Path $env:TEMP 'ScreenRecorder'
+                    New-Item -ItemType Directory -Path $baseDir -Force -ErrorAction SilentlyContinue | Out-Null
+                    [System.Windows.MessageBox]::Show("Current directory is not writable.`n`nSaving to: $baseDir", "Warning", "OK", "Warning")
+                }
+                $script:outDir = Join-Path $baseDir "ScreenCaptures\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
             }
             # Start recording
-            $script:outDir = Join-Path $baseDir "ScreenCaptures\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
             New-Item -ItemType Directory -Path $script:outDir -Force | Out-Null
             # Build monitor bounds array
             $monitorBoundsArray = @()

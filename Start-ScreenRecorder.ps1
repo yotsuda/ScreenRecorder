@@ -171,7 +171,8 @@ public class DisplayHelper {
 
 public class BackgroundRecorder {
     private Task _task;
-    private volatile bool _running;
+    private CancellationTokenSource _cts;
+    private Action<string> _errorCallback;
     private int _intervalMs;
     private string _outDir;
     private bool _saveMasked;
@@ -201,7 +202,7 @@ public class BackgroundRecorder {
         _showOverlay = true;
     }
 
-    public bool Start(Rectangle bounds, Rectangle[] monitorBounds, int thumbW, int thumbH, int fps, int quality, string outDir, bool saveMasked, double scale, IntPtr windowHandle) {
+    public bool Start(Rectangle bounds, Rectangle[] monitorBounds, int thumbW, int thumbH, int fps, int quality, string outDir, bool saveMasked, double scale, IntPtr windowHandle, Action<string> errorCallback) {
         // Validate parameters
         if (bounds.Width <= 0 || bounds.Height <= 0 || thumbW <= 0 || thumbH <= 0) {
             _lastError = "Invalid dimensions: bounds=" + bounds.Width + "x" + bounds.Height + ", thumb=" + thumbW + "x" + thumbH;
@@ -223,25 +224,51 @@ public class BackgroundRecorder {
         _prevHash = 0;
         _saved = 0;
         _quality = quality;
+        _errorCallback = errorCallback;
 
         try {
             _captureBmp = new Bitmap(bounds.Width, bounds.Height);
-            _captureG = Graphics.FromImage(_captureBmp);
-            _thumbBmp = new Bitmap(thumbW, thumbH);
-            _thumbG = Graphics.FromImage(_thumbBmp);
+            try {
+                _captureG = Graphics.FromImage(_captureBmp);
+                _thumbBmp = new Bitmap(thumbW, thumbH);
+                try {
+                    _thumbG = Graphics.FromImage(_thumbBmp);
 
-            // Allocate per-monitor bitmaps for multi-monitor capture
-            if (_monitorBounds != null && _monitorBounds.Length > 1) {
-                _monitorBmps = new Bitmap[_monitorBounds.Length];
-                _monitorGs = new Graphics[_monitorBounds.Length];
-                for (int i = 0; i < _monitorBounds.Length; i++) {
-                    _monitorBmps[i] = new Bitmap(_monitorBounds[i].Width, _monitorBounds[i].Height);
-                    _monitorGs[i] = Graphics.FromImage(_monitorBmps[i]);
+                    // Allocate per-monitor bitmaps for multi-monitor capture
+                    if (_monitorBounds != null && _monitorBounds.Length > 1) {
+                        _monitorBmps = new Bitmap[_monitorBounds.Length];
+                        _monitorGs = new Graphics[_monitorBounds.Length];
+                        try {
+                            for (int i = 0; i < _monitorBounds.Length; i++) {
+                                _monitorBmps[i] = new Bitmap(_monitorBounds[i].Width, _monitorBounds[i].Height);
+                                _monitorGs[i] = Graphics.FromImage(_monitorBmps[i]);
+                            }
+                        } catch {
+                            // Clean up partial allocations
+                            for (int i = 0; i < _monitorBmps.Length; i++) {
+                                if (_monitorGs != null && i < _monitorGs.Length && _monitorGs[i] != null) {
+                                    _monitorGs[i].Dispose();
+                                    _monitorGs[i] = null;
+                                }
+                                if (_monitorBmps[i] != null) {
+                                    _monitorBmps[i].Dispose();
+                                    _monitorBmps[i] = null;
+                                }
+                            }
+                            throw;
+                        }
+                    }
+                } catch {
+                    if (_thumbBmp != null) { _thumbBmp.Dispose(); _thumbBmp = null; }
+                    throw;
                 }
+            } catch {
+                if (_captureG != null) { _captureG.Dispose(); _captureG = null; }
+                if (_captureBmp != null) { _captureBmp.Dispose(); _captureBmp = null; }
+                throw;
             }
         } catch (Exception ex) {
             _lastError = "Bitmap init failed: " + ex.Message;
-            Stop();
             return false;
         }
 
@@ -252,14 +279,29 @@ public class BackgroundRecorder {
         _encoderParams = new EncoderParameters(1);
         _encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, (long)quality);
 
-        _running = true;
-        _task = Task.Run(RecordLoop);
+        _cts = new CancellationTokenSource();
+        _task = Task.Run(() => RecordLoop(_cts.Token));
         return true;
     }
 
     public void Stop() {
-        _running = false;
-        if (_task != null) { _task.Wait(2000); _task = null; }
+        // Signal cancellation and wait for task to complete
+        if (_cts != null) {
+            _cts.Cancel();
+            if (_task != null) {
+                try {
+                    if (!_task.Wait(5000)) {
+                        // Task didn't complete in 5 seconds - force cleanup
+                        _lastError = "Task timeout during stop - forced cleanup";
+                    }
+                } catch (AggregateException) {
+                    // Task was cancelled - this is expected
+                }
+                _task = null;
+            }
+            _cts.Dispose();
+            _cts = null;
+        }
         // Dispose per-monitor resources
         if (_monitorGs != null) {
             for (int i = 0; i < _monitorGs.Length; i++) {
@@ -277,13 +319,14 @@ public class BackgroundRecorder {
         if (_thumbBmp != null) { _thumbBmp.Dispose(); _thumbBmp = null; }
         if (_captureG != null) { _captureG.Dispose(); _captureG = null; }
         if (_captureBmp != null) { _captureBmp.Dispose(); _captureBmp = null; }
+        if (_encoderParams != null) { _encoderParams.Dispose(); _encoderParams = null; }
     }
 
-    private void RecordLoop() {
+    private void RecordLoop(CancellationToken ct) {
         DisplayHelper.RECT _prevRect = new DisplayHelper.RECT();
         bool firstFrame = true;
 
-        while (_running) {
+        while (!ct.IsCancellationRequested) {
             var start = DateTime.Now;
             try {
                 // Get exclude rect BEFORE capture (more accurate timing)
@@ -303,7 +346,10 @@ public class BackgroundRecorder {
                     // Skip this frame - window is moving
                     var skipElapsed = (int)(DateTime.Now - start).TotalMilliseconds;
                     int skipSleep = _intervalMs - skipElapsed;
-                    if (skipSleep > 0) Task.Delay(skipSleep).Wait();
+                    if (skipSleep > 0) {
+                        try { Task.Delay(skipSleep, ct).Wait(); }
+                        catch (AggregateException) { return; }
+                    }
                     continue;
                 }
 
@@ -376,11 +422,17 @@ public class BackgroundRecorder {
                     _saved++;
                     _prevHash = hash;
                 }
-            } catch (Exception ex) { _lastError = ex.ToString(); }
+            } catch (Exception ex) {
+                _lastError = ex.ToString();
+                _errorCallback?.Invoke(_lastError);
+            }
 
             var elapsed = (int)(DateTime.Now - start).TotalMilliseconds;
             int sleep = _intervalMs - elapsed;
-            if (sleep > 0) Task.Delay(sleep).Wait();
+            if (sleep > 0) {
+                try { Task.Delay(sleep, ct).Wait(); }
+                catch (AggregateException) { return; }
+            }
         }
     }
 }
@@ -564,7 +616,7 @@ public class BackgroundRecorder {
     }
     # Selected monitors (array of indices)
     $primaryIdx = [Array]::IndexOf($script:screens, [System.Windows.Forms.Screen]::PrimaryScreen)
-    $script:selectedMonitors = @($primaryIdx -ge 0 ? $primaryIdx : 0)
+    $script:selectedMonitors = @($(if ($primaryIdx -ge 0) { $primaryIdx } else { 0 }))
 
     function Update-MonitorLabel {
         if ($script:selectedMonitors.Count -eq 0) {
@@ -763,23 +815,50 @@ public class BackgroundRecorder {
     # Get window handle for physical coordinate calculation
     $windowHelper = [System.Windows.Interop.WindowInteropHelper]::new($window)
 
+    # Test write access to a directory
+    function Test-WriteAccess {
+        param([string]$Path)
+        try {
+            $testFile = Join-Path $Path ".sr_test_$PID"
+            [System.IO.File]::WriteAllText($testFile, 'test')
+            Remove-Item $testFile -Force
+            return $true
+        } catch {
+            return $false
+        }
+    }
+
     $btnToggle.Add_Click({
         if (-not $script:recording) {
-            # Check if current directory is a system folder
-            $blocked = @($env:SystemRoot, "$env:SystemRoot\System32", $env:ProgramFiles, ${env:ProgramFiles(x86)})
-            if ((Get-Location).Path -iin $blocked) {
-                [System.Windows.MessageBox]::Show("Cannot record in system folder. Please change to a working directory.", "Warning", "OK", "Warning")
-                return
+            # Check write access and determine output directory
+            $currentDir = Get-Location
+            if (Test-WriteAccess $currentDir) {
+                $baseDir = $currentDir.Path
+            } else {
+                $baseDir = Join-Path $env:TEMP 'ScreenRecorder'
+                New-Item -ItemType Directory -Path $baseDir -Force -ErrorAction SilentlyContinue | Out-Null
+                [System.Windows.MessageBox]::Show("Current directory is not writable.`n`nSaving to: $baseDir", "Warning", "OK", "Warning")
             }
             # Start recording
-            $script:outDir = ".\ScreenCaptures\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+            $script:outDir = Join-Path $baseDir "ScreenCaptures\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
             New-Item -ItemType Directory -Path $script:outDir -Force | Out-Null
             # Build monitor bounds array
             $monitorBoundsArray = @()
             foreach ($idx in $script:selectedMonitors) {
                 $monitorBoundsArray += Get-PhysicalBounds $script:screens[$idx]
             }
-            $started = $script:recorder.Start($script:bounds, [System.Drawing.Rectangle[]]$monitorBoundsArray, $script:w, $script:h, $script:fpsValue, $script:quality, (Resolve-Path $script:outDir).Path, $SaveMasked, $script:scaleValue, $windowHelper.Handle)
+            # Error callback for recording errors
+            $errorHandler = {
+                param([string]$errorMsg)
+                $window.Dispatcher.Invoke({
+                    [System.Windows.MessageBox]::Show("Recording error occurred:`n`n$errorMsg", "Recording Error", "OK", "Error")
+                    # Stop recording on error
+                    if ($script:recording) {
+                        $btnToggle.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+                    }
+                })
+            }
+            $started = $script:recorder.Start($script:bounds, [System.Drawing.Rectangle[]]$monitorBoundsArray, $script:w, $script:h, $script:fpsValue, $script:quality, $script:outDir, $SaveMasked, $script:scaleValue, $windowHelper.Handle, $errorHandler)
             if (-not $started) {
                 [System.Windows.MessageBox]::Show("Recording failed: $($script:recorder.LastError)", "Error", "OK", "Error")
                 Remove-Item -Path $script:outDir -Force -ErrorAction SilentlyContinue

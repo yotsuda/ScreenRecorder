@@ -153,7 +153,7 @@ public class DisplayHelper {
         return rect;
     }
 
-    // Fast FNV-1a hash for bitmap comparison
+    // Fast FNV-1a hash for bitmap comparison (4x4 sampling for performance)
     public static long ComputeImageHash(Bitmap bmp, int exL, int exT, int exR, int exB) {
         var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height),
             ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
@@ -163,13 +163,13 @@ public class DisplayHelper {
             int width = bmp.Width;
             int height = bmp.Height;
             IntPtr scan0 = data.Scan0;
-            for (int y = 0; y < height; y++) {
+            for (int y = 0; y < height; y += 4) {
                 IntPtr row = IntPtr.Add(scan0, y * stride);
                 if (y >= exT && y < exB) {
-                    for (int x = 0; x < exL; x++) { hash ^= Marshal.ReadInt32(row, x * 4); hash *= 0x100000001b3L; }
-                    for (int x = exR; x < width; x++) { hash ^= Marshal.ReadInt32(row, x * 4); hash *= 0x100000001b3L; }
+                    for (int x = 0; x < exL; x += 4) { hash ^= Marshal.ReadInt32(row, x * 4); hash *= 0x100000001b3L; }
+                    for (int x = exR; x < width; x += 4) { hash ^= Marshal.ReadInt32(row, x * 4); hash *= 0x100000001b3L; }
                 } else {
-                    for (int x = 0; x < width; x++) { hash ^= Marshal.ReadInt32(row, x * 4); hash *= 0x100000001b3L; }
+                    for (int x = 0; x < width; x += 4) { hash ^= Marshal.ReadInt32(row, x * 4); hash *= 0x100000001b3L; }
                 }
             }
             return hash;
@@ -341,10 +341,10 @@ public class BackgroundRecorder {
             try {
                 // Get exclude rect BEFORE capture (more accurate timing)
                 var rect = DisplayHelper.GetPhysicalWindowRect(_windowHandle);
-                int exL = (int)((rect.Left - _bounds.Left) * _scale);
-                int exT = (int)((rect.Top - _bounds.Top) * _scale);
-                int exR = (int)((rect.Right - _bounds.Left) * _scale);
-                int exB = (int)((rect.Bottom - _bounds.Top) * _scale);
+                int exL = (int)((rect.Left - _bounds.Left) * _scale) / 4 * 4;
+                int exT = (int)((rect.Top - _bounds.Top) * _scale) / 4 * 4;
+                int exR = ((int)((rect.Right - _bounds.Left) * _scale) + 3) / 4 * 4;
+                int exB = ((int)((rect.Bottom - _bounds.Top) * _scale) + 3) / 4 * 4;
 
                 // Skip if window is moving (rect changed since last frame)
                 bool isMoving = !firstFrame && (rect.Left != _prevRect.Left || rect.Top != _prevRect.Top ||

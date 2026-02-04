@@ -1,5 +1,5 @@
 ﻿<#PSScriptInfo
-.VERSION 1.0.0
+.VERSION 1.1.0
 .GUID d47eab76-de84-454d-aead-8b61ed3335eb
 .AUTHOR Yoshifumi Tsuda
 .COPYRIGHT Copyright (c) 2025-2026 Yoshifumi Tsuda. MIT License.

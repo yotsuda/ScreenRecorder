@@ -116,6 +116,7 @@ function Start-ScreenRecorder {
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -336,7 +337,7 @@ public class BackgroundRecorder {
         bool firstFrame = true;
 
         while (!ct.IsCancellationRequested) {
-            var start = DateTime.Now;
+            var sw = Stopwatch.StartNew();
             try {
                 // Get exclude rect BEFORE capture (more accurate timing)
                 var rect = DisplayHelper.GetPhysicalWindowRect(_windowHandle);
@@ -353,7 +354,7 @@ public class BackgroundRecorder {
 
                 if (isMoving) {
                     // Skip this frame - window is moving
-                    var skipElapsed = (int)(DateTime.Now - start).TotalMilliseconds;
+                    var skipElapsed = (int)sw.ElapsedMilliseconds;
                     int skipSleep = _intervalMs - skipElapsed;
                     if (skipSleep > 0) {
                         try { Task.Delay(skipSleep, ct).Wait(); }
@@ -436,7 +437,7 @@ public class BackgroundRecorder {
                 if (_errorCallback != null) _errorCallback(_lastError);
             }
 
-            var elapsed = (int)(DateTime.Now - start).TotalMilliseconds;
+            var elapsed = (int)sw.ElapsedMilliseconds;
             int sleep = _intervalMs - elapsed;
             if (sleep > 0) {
                 try { Task.Delay(sleep, ct).Wait(); }

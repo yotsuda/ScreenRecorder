@@ -1,0 +1,241 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<helpItems schema="maml" xmlns="http://msh">
+  <command:command xmlns:maml="http://schemas.microsoft.com/maml/2004/10" xmlns:command="http://schemas.microsoft.com/maml/dev/command/2004/10" xmlns:dev="http://schemas.microsoft.com/maml/dev/2004/10" xmlns:MSHelp="http://msdn.microsoft.com/mshelp">
+    <command:details>
+      <command:name>Start-ScreenRecorder</command:name>
+      <command:verb>Start</command:verb>
+      <command:noun>ScreenRecorder</command:noun>
+      <maml:description>
+        <maml:para>Starts a screen recorder with a clock overlay for debugging and log correlation.</maml:para>
+      </maml:description>
+    </command:details>
+    <maml:description>
+      <maml:para>Captures screenshots at regular intervals while displaying a large clock overlay. Designed for correlating screen captures with log timestamps during bug reproduction. Requires no external dependencies - uses only PowerShell and .NET. Can be run directly without module installation.</maml:para>
+    </maml:description>
+    <command:syntax>
+      <command:syntaxItem>
+        <maml:name>Start-ScreenRecorder</maml:name>
+        <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="1" aliases="none">
+          <maml:name>FPS</maml:name>
+          <maml:description>
+            <maml:para>Frames per second for capture. Default is 2.</maml:para>
+          </maml:description>
+          <command:parameterValue required="true" variableLength="false">Int32</command:parameterValue>
+          <dev:type>
+            <maml:name>Int32</maml:name>
+            <maml:uri />
+          </dev:type>
+          <dev:defaultValue>2</dev:defaultValue>
+        </command:parameter>
+        <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="2" aliases="none">
+          <maml:name>Scale</maml:name>
+          <maml:description>
+            <maml:para>Scale factor for captured images (0.1 to 1.0). Default is 0.75.</maml:para>
+          </maml:description>
+          <command:parameterValue required="true" variableLength="false">Double</command:parameterValue>
+          <dev:type>
+            <maml:name>Double</maml:name>
+            <maml:uri />
+          </dev:type>
+          <dev:defaultValue>0.75</dev:defaultValue>
+        </command:parameter>
+        <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="3" aliases="none">
+          <maml:name>Quality</maml:name>
+          <maml:description>
+            <maml:para>JPEG quality for captured images (1-100). Default is 75.</maml:para>
+          </maml:description>
+          <command:parameterValue required="true" variableLength="false">Int32</command:parameterValue>
+          <dev:type>
+            <maml:name>Int32</maml:name>
+            <maml:uri />
+          </dev:type>
+          <dev:defaultValue>75</dev:defaultValue>
+        </command:parameter>
+        <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="5" aliases="none">
+          <maml:name>RecordFor</maml:name>
+          <maml:description>
+            <maml:para>Starts recording immediately and stops after the specified duration.</maml:para>
+          </maml:description>
+          <command:parameterValue required="true" variableLength="false">TimeSpan</command:parameterValue>
+          <dev:type>
+            <maml:name>TimeSpan</maml:name>
+            <maml:uri />
+          </dev:type>
+          <dev:defaultValue>None</dev:defaultValue>
+        </command:parameter>
+        <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="6" aliases="none">
+          <maml:name>OutputPath</maml:name>
+          <maml:description>
+            <maml:para>Base directory for saving screenshots. A timestamped subfolder will be created. If not specified, uses current directory or TEMP folder as fallback.</maml:para>
+          </maml:description>
+          <command:parameterValue required="true" variableLength="false">String</command:parameterValue>
+          <dev:type>
+            <maml:name>String</maml:name>
+            <maml:uri />
+          </dev:type>
+          <dev:defaultValue>None</dev:defaultValue>
+        </command:parameter>
+        <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="named" aliases="proga">
+          <maml:name>ProgressAction</maml:name>
+          <maml:description>
+            <maml:para>{{ Fill ProgressAction Description }}</maml:para>
+          </maml:description>
+          <command:parameterValue required="true" variableLength="false">ActionPreference</command:parameterValue>
+          <dev:type>
+            <maml:name>ActionPreference</maml:name>
+            <maml:uri />
+          </dev:type>
+          <dev:defaultValue>None</dev:defaultValue>
+        </command:parameter>
+        <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="named" aliases="none">
+          <maml:name>SaveMasked</maml:name>
+          <maml:description>
+            <maml:para>Saves masked images (with clock area blacked out) for debugging.</maml:para>
+          </maml:description>
+          <dev:type>
+            <maml:name>SwitchParameter</maml:name>
+            <maml:uri />
+          </dev:type>
+          <dev:defaultValue>False</dev:defaultValue>
+        </command:parameter>
+      </command:syntaxItem>
+    </command:syntax>
+    <command:parameters>
+      <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="1" aliases="none">
+        <maml:name>FPS</maml:name>
+        <maml:description>
+          <maml:para>Frames per second for capture. Default is 2.</maml:para>
+        </maml:description>
+        <command:parameterValue required="true" variableLength="false">Int32</command:parameterValue>
+        <dev:type>
+          <maml:name>Int32</maml:name>
+          <maml:uri />
+        </dev:type>
+        <dev:defaultValue>2</dev:defaultValue>
+      </command:parameter>
+      <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="6" aliases="none">
+        <maml:name>OutputPath</maml:name>
+        <maml:description>
+          <maml:para>Base directory for saving screenshots. A timestamped subfolder will be created. If not specified, uses current directory or TEMP folder as fallback.</maml:para>
+        </maml:description>
+        <command:parameterValue required="true" variableLength="false">String</command:parameterValue>
+        <dev:type>
+          <maml:name>String</maml:name>
+          <maml:uri />
+        </dev:type>
+        <dev:defaultValue>None</dev:defaultValue>
+      </command:parameter>
+      <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="named" aliases="proga">
+        <maml:name>ProgressAction</maml:name>
+        <maml:description>
+          <maml:para>{{ Fill ProgressAction Description }}</maml:para>
+        </maml:description>
+        <command:parameterValue required="true" variableLength="false">ActionPreference</command:parameterValue>
+        <dev:type>
+          <maml:name>ActionPreference</maml:name>
+          <maml:uri />
+        </dev:type>
+        <dev:defaultValue>None</dev:defaultValue>
+      </command:parameter>
+      <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="3" aliases="none">
+        <maml:name>Quality</maml:name>
+        <maml:description>
+          <maml:para>JPEG quality for captured images (1-100). Default is 75.</maml:para>
+        </maml:description>
+        <command:parameterValue required="true" variableLength="false">Int32</command:parameterValue>
+        <dev:type>
+          <maml:name>Int32</maml:name>
+          <maml:uri />
+        </dev:type>
+        <dev:defaultValue>75</dev:defaultValue>
+      </command:parameter>
+      <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="5" aliases="none">
+        <maml:name>RecordFor</maml:name>
+        <maml:description>
+          <maml:para>Starts recording immediately and stops after the specified duration.</maml:para>
+        </maml:description>
+        <command:parameterValue required="true" variableLength="false">TimeSpan</command:parameterValue>
+        <dev:type>
+          <maml:name>TimeSpan</maml:name>
+          <maml:uri />
+        </dev:type>
+        <dev:defaultValue>None</dev:defaultValue>
+      </command:parameter>
+      <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="named" aliases="none">
+        <maml:name>SaveMasked</maml:name>
+        <maml:description>
+          <maml:para>Saves masked images (with clock area blacked out) for debugging.</maml:para>
+        </maml:description>
+        <command:parameterValue required="false" variableLength="false">SwitchParameter</command:parameterValue>
+        <dev:type>
+          <maml:name>SwitchParameter</maml:name>
+          <maml:uri />
+        </dev:type>
+        <dev:defaultValue>False</dev:defaultValue>
+      </command:parameter>
+      <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="False" position="2" aliases="none">
+        <maml:name>Scale</maml:name>
+        <maml:description>
+          <maml:para>Scale factor for captured images (0.1 to 1.0). Default is 0.75.</maml:para>
+        </maml:description>
+        <command:parameterValue required="true" variableLength="false">Double</command:parameterValue>
+        <dev:type>
+          <maml:name>Double</maml:name>
+          <maml:uri />
+        </dev:type>
+        <dev:defaultValue>0.75</dev:defaultValue>
+      </command:parameter>
+    </command:parameters>
+    <command:inputTypes />
+    <command:returnValues />
+    <maml:alertSet>
+      <maml:alert>
+        <maml:para></maml:para>
+      </maml:alert>
+    </maml:alertSet>
+    <command:examples>
+      <command:example>
+        <maml:title>-------------------------- EXAMPLE 1 --------------------------</maml:title>
+        <dev:code>Start-ScreenRecorder
+Starts the recorder in background mode.</dev:code>
+        <dev:remarks>
+          <maml:para></maml:para>
+        </dev:remarks>
+      </command:example>
+      <command:example>
+        <maml:title>-------------------------- EXAMPLE 2 --------------------------</maml:title>
+        <dev:code>Start-ScreenRecorder -FPS 10 -Scale 0.75
+Starts with higher frame rate and larger output images.</dev:code>
+        <dev:remarks>
+          <maml:para></maml:para>
+        </dev:remarks>
+      </command:example>
+      <command:example>
+        <maml:title>-------------------------- EXAMPLE 3 --------------------------</maml:title>
+        <dev:code>Start-ScreenRecorder -RecordFor 0:10:00
+Starts recording immediately and stops after 10 minutes.</dev:code>
+        <dev:remarks>
+          <maml:para></maml:para>
+        </dev:remarks>
+      </command:example>
+      <command:example>
+        <maml:title>-------------------------- EXAMPLE 4 --------------------------</maml:title>
+        <dev:code>Start-ScreenRecorder -OutputPath D:\Screenshots
+Saves screenshots to D:\Screenshots\yyyyMMdd_HHmmss\ folder.</dev:code>
+        <dev:remarks>
+          <maml:para></maml:para>
+        </dev:remarks>
+      </command:example>
+    </command:examples>
+    <command:relatedLinks>
+      <maml:navigationLink>
+        <maml:linkText>https://github.com/yotsuda/ScreenRecorder/blob/master/docs/en-US/Start-ScreenRecorder.md</maml:linkText>
+        <maml:uri>https://github.com/yotsuda/ScreenRecorder/blob/master/docs/en-US/Start-ScreenRecorder.md</maml:uri>
+      </maml:navigationLink>
+      <maml:navigationLink>
+        <maml:linkText>https://github.com/yotsuda/ScreenRecorder</maml:linkText>
+        <maml:uri>https://github.com/yotsuda/ScreenRecorder</maml:uri>
+      </maml:navigationLink>
+    </command:relatedLinks>
+  </command:command>
+</helpItems>

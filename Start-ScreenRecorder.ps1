@@ -1,5 +1,5 @@
 ﻿<#PSScriptInfo
-.VERSION 1.1.0
+.VERSION 1.2.0
 .GUID d47eab76-de84-454d-aead-8b61ed3335eb
 .AUTHOR Yoshifumi Tsuda
 .COPYRIGHT Copyright (c) 2025-2026 Yoshifumi Tsuda. MIT License.
@@ -9,6 +9,10 @@
 .DESCRIPTION Screen capture tool with clock overlay for debugging and log correlation.
 #>
 
+# File-level param: receives args when this .ps1 is invoked directly
+# (including via Start-Process for the -Background relaunch).
+# KEEP IN SYNC with the function-level param block below — they must match
+# so that `Start-ScreenRecorder @PSBoundParameters` forwards every option.
 param(
     [Parameter(DontShow)]
     [switch]$Background,
@@ -27,43 +31,11 @@ param(
 )
 
 function Start-ScreenRecorder {
-    <#
-    .SYNOPSIS
-        Starts a screen recorder with a clock overlay for debugging and log correlation.
-    .DESCRIPTION
-        Captures screenshots at regular intervals while displaying a large clock overlay.
-        Designed for correlating screen captures with log timestamps during bug reproduction.
-        Requires no external dependencies - uses only PowerShell and .NET.
-        Can be run directly without module installation.
-    .PARAMETER Background
-        Runs the recorder in a hidden background process.
-    .PARAMETER FPS
-        Frames per second for capture. Default is 2.
-    .PARAMETER Scale
-        Scale factor for captured images (0.1 to 1.0). Default is 0.75.
-    .PARAMETER Quality
-        JPEG quality for captured images (1-100). Default is 75.
-    .PARAMETER SaveMasked
-        Saves masked images (with clock area blacked out) for debugging.
-    .PARAMETER RecordFor
-        Starts recording immediately and stops after the specified duration.
-    .PARAMETER OutputPath
-        Base directory for saving screenshots. A timestamped subfolder will be created.
-        If not specified, uses current directory or TEMP folder as fallback.
-    .EXAMPLE
-        Start-ScreenRecorder
-        Starts the recorder in background mode.
-    .EXAMPLE
-        Start-ScreenRecorder -FPS 10 -Scale 0.75
-        Starts with higher frame rate and larger output images.
-    .EXAMPLE
-        Start-ScreenRecorder -RecordFor 0:10:00
-        Starts recording immediately and stops after 10 minutes.
-    .EXAMPLE
-        Start-ScreenRecorder -OutputPath D:\Screenshots
-        Saves screenshots to D:\Screenshots\yyyyMMdd_HHmmss\ folder.
-    #>
-    [CmdletBinding()]
+    # Help content lives in docs/en-US/Start-ScreenRecorder.md (PlatyPS source)
+    # and is compiled to en-US/ScreenRecorder-help.xml via New-ExternalHelp.
+    # The .EXTERNALHELP directive below points runtime Get-Help at that XML.
+    [CmdletBinding(HelpUri = 'https://github.com/yotsuda/ScreenRecorder/blob/master/docs/en-US/Start-ScreenRecorder.md')]
+    # KEEP IN SYNC with the file-level param block at the top of this file.
     param(
         [Parameter(DontShow)]
         [switch]$Background,
@@ -80,14 +52,15 @@ function Start-ScreenRecorder {
         [TimeSpan]$RecordFor,
         [string]$OutputPath
     )
+    # .EXTERNALHELP ScreenRecorder-help.xml
 
     if (-not $Background) {
         Write-Host 'Starting ScreenRecorder... ' -NoNewline
-        $readyFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "sr_ready_$PID.tmp")
+        $fgReadyFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "sr_ready_$PID.tmp")
         $exe = (Get-Process -Id $PID).Path
         $scriptPath = $MyInvocation.MyCommand.ScriptBlock.File
         if (-not $scriptPath) { $scriptPath = $PSCommandPath }
-        $procArgs = "-NoProfile -WindowStyle Hidden -File `"$scriptPath`" -Background -FPS $FPS -Scale $Scale -Quality $Quality -ReadyFile `"$readyFile`""
+        $procArgs = "-NoProfile -WindowStyle Hidden -File `"$scriptPath`" -Background -FPS $FPS -Scale $Scale -Quality $Quality -ReadyFile `"$fgReadyFile`""
         if ($SaveMasked) { $procArgs += " -SaveMasked" }
         if ($RecordFor -gt [TimeSpan]::Zero) { $procArgs += " -RecordFor $($RecordFor.ToString())" }
         if ($OutputPath) { $procArgs += " -OutputPath `"$OutputPath`"" }
@@ -97,17 +70,27 @@ function Start-ScreenRecorder {
         $i = 0
         $timeout = [DateTime]::Now.AddSeconds(30)
         [Console]::CursorVisible = $false
-        while (-not (Test-Path $readyFile) -and [DateTime]::Now -lt $timeout) {
+        while (-not (Test-Path $fgReadyFile) -and [DateTime]::Now -lt $timeout) {
             Write-Host "`b$($spinner[$i++ % 4])" -NoNewline
             Start-Sleep -Milliseconds 100
         }
         [Console]::CursorVisible = $true
-        Remove-Item $readyFile -ErrorAction SilentlyContinue
-        Write-Host "`b Ready!"
+        $ready = Test-Path $fgReadyFile
+        Remove-Item $fgReadyFile -ErrorAction SilentlyContinue
+        if ($ready) {
+            Write-Host "`b Ready!"
+        } else {
+            Write-Host "`b Failed (background process did not signal ready within 30s)" -ForegroundColor Red
+        }
         return
     }
     Add-Type -AssemblyName PresentationFramework,System.Windows.Forms,System.Drawing
+    # Add-Type registers types globally per session, so re-running Start-ScreenRecorder
+    # in the same shell would throw "type already exists" without this guard.
+    if (-not ('DisplayHelper' -as [type])) {
     $drawingAsm = [System.Drawing.Bitmap].Assembly.Location
+    # System.Drawing.Primitives DLL — needed as -ReferencedAssemblies on PS7 where
+    # primitive types (Rectangle/Point) live in a separate assembly from System.Drawing.Common.
     $primAsm = [System.Drawing.Rectangle].Assembly.Location
     $winCoreAsm = [System.Drawing.Bitmap].Assembly.GetReferencedAssemblies() |
         Where-Object { $_.Name -eq 'System.Private.Windows.Core' } |
@@ -447,6 +430,7 @@ public class BackgroundRecorder {
     }
 }
 "@ -ReferencedAssemblies (@($drawingAsm,$primAsm) + @($winCoreAsm | Where-Object { $_ }))
+    }
     [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     Topmost="True" AllowsTransparency="True" WindowStyle="None" Background="#01000000"
@@ -872,16 +856,18 @@ public class BackgroundRecorder {
             foreach ($idx in $script:selectedMonitors) {
                 $monitorBoundsArray += Get-PhysicalBounds $script:screens[$idx]
             }
-            # Error callback for recording errors
+            # Error callback for recording errors.
+            # Use BeginInvoke (not Invoke) so the recorder task thread isn't blocked
+            # waiting for the UI thread, which would deadlock when the click handler
+            # calls _recorder.Stop() and Stop() waits on the very task we came from.
             $errorHandler = {
                 param([string]$errorMsg)
-                $window.Dispatcher.Invoke({
+                $window.Dispatcher.BeginInvoke([Action]{
                     [System.Windows.MessageBox]::Show("Recording error occurred:`n`n$errorMsg", "Recording Error", "OK", "Error")
-                    # Stop recording on error
                     if ($script:recording) {
                         $btnToggle.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
                     }
-                })
+                }) | Out-Null
             }
             $started = $script:recorder.Start($script:bounds, [System.Drawing.Rectangle[]]$monitorBoundsArray, $script:w, $script:h, $script:fpsValue, $script:quality, $script:outDir, $SaveMasked, $script:scaleValue, $windowHelper.Handle, $errorHandler)
             if (-not $started) {
